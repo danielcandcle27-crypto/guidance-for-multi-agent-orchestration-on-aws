@@ -1,0 +1,7 @@
+boto3 
+aws-lambda-powertools[all]
+urllib3<2.0.0,>=1.26.0
+requests
+opensearch-py
+retrying
+requests-aws4auth
