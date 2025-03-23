@@ -1,0 +1,43 @@
+{
+  "name": "multiagent-collaboration",
+  "version": "1.0.0",
+  "description": "MAC for customer support",
+  "main": "index.js",
+  "workspaces": [
+    "packages/*"
+  ],
+  "private": true,
+  "scripts": {
+    "test": "echo 'MAC Demo Customer Support'",
+    "install:deps": "npm install && npm i aws-cdk-lib",
+    "install:infra": "cd packages/infra && npm install",
+    "install:webapp": "cd packages/webapp && npm install",
+    "install:all": "npm run install:deps && npm run install:infra && npm run install:webapp",
+    "clean": "rm -rf node_modules && rm -rf packages/*/node_modules && rm -rf packages/*/dist",
+    "deploy": "npm run -w infra simple-deploy",
+    "deploy:webapp": "npm run -w infra deploy-website",
+    "deploy:all": "npm run -w infra full-deploy",
+    "deploy-infra": "npm run -w infra deploy",
+    "delete:stack": "bash packages/infra/scripts/rollback-mac-demo.sh"
+  },
+  "keywords": [],
+  "author": "azrahuls@, tamjay@",
+  "license": "Apache-2.0",
+  "volta": {
+    "node": "22.6.0"
+  },
+  "dependencies": {
+    "@aws-amplify/data-schema-types": "^1.2.0",
+    "@aws-crypto/util": "^5.2.0",
+    "@cdklabs/generative-ai-cdk-constructs": "^0.1.293",
+    "@cloudscape-design/components": "^3.0.899",
+    "aws-cdk-lib": "^2.185.0",
+    "cdk-nag": "^2.35.30",
+    "get-nonce": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.5",
+    "aws-cdk": "^2.180.0"
+  }
+}
