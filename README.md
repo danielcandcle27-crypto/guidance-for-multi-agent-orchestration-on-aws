@@ -153,11 +153,12 @@ export AWS_DEFAULT_REGION=us-west-2
 
 
 ### Clone repo & install dependencies
-clone the repo from <https://gitlab.aws.dev/genai-labs/demo-assets/multiagent-collaboration>
+clone the repo from <https://github.com/awslabs/genai-labs-mac-demo-customer-support>
+
 
 ```bash
 cd /project-root/
-git clone git@ssh.gitlab.aws.dev:genai-labs/demo-assets/mac-customer-support.git
+gh repo clone awslabs/genai-labs-mac-demo-customer-support
 ```
 
 We are all set to install dependencies by using the following command. This will install `npm` dependencies from our internal AWS CodeArtifact repository and will take at-least 2-5 mins to complete for first time. Great time for a ☕
