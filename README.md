@@ -59,8 +59,7 @@ The runtime chatbot is a React-based website that uses a WebSocket API and a Lam
 ![Diagram](images/genai-mac-arch-diagram.png)
 
 ## Storylane URL
-![Storylane URL](https://aws.storylane.io/share/otdlltvd8jz7)
-(Passcode: P05tR1VBedrock2024)
+https://aws.storylane.io/share/otdlltvd8jz7
 
 ## Demo Scope
 
