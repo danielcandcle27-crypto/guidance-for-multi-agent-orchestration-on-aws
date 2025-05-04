@@ -116,11 +116,9 @@ We recommend creating a [Budget](https://docs.aws.amazon.com/cost-management/lat
 | Amazon Bedrock Knowledge Base                         | Assumed cost based on usage (e.g., 100 queries per month at \$0.01 per query) | \$1          |
 | Amazon DynamoDB                                       | Read/Write Capacity Units (assumed low usage) | <\$1         |
 | AWS Lambda (additional for Supervisor Agent)          | Additional Invocations (if any)            | ~\$0.20      |
-| Amazon Athena (additional for querying S3 data)       | Additional data scanned (if any)           | <\$1         |
 | AWS Cognito                                           | User pool management (assumed low usage)   | <\$1         |
 | AWS CloudFront                                        | Data transfer out (assumed low usage)      | <\$1         |
 | AWS Certificate Manager                               | SSL/TLS certificates (free tier)           | \$0          |
-| Amazon S3 (additional for storing more data)          | Additional storage (if any)                | <\$1         |
 
 
 
