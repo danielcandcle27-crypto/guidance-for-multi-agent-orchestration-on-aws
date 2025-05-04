@@ -1,36 +1,36 @@
 # Multi-agent Collaboration (Customer Support Assistant)
 
 ### Table of Contents
-- [Overview](#overview)
-- [Key Objectives](#key-objectives)
-- [Use Case: Intelligent Customer Support](#use-case-intelligent-customer-support)
-- [Agents Involved](#agents-involved)
-- [Runtime Chatbot](#runtime-chatbot)
-- [Architecture Diagram](#architecture-diagram)
-- [Storylane URL](#storylane-url)
-- [Demo Scope](#demo-scope)
-   - 1. [Natural Language Inquiry Handling](#natural-language-inquiry-handling)
-   - 2. [Order Tracking and Management](#order-tracking-and-management)
-   - 3. [Personalized Product Recommendationsn](#personalized-product-recommendations)
-   - 4. [Technical Issue Resolution](#technical-issue-resolution)
-   - 5. [Persistent Customer Profile for Personalized Service](#persistent-customer-profile-for-personalized-service)
-   - 6. [Dynamic Response and Tool Access](#dynamic-response-and-tool-access)
-   - 7. [Seamless Multi-Agent Coordination and Orchestration](#seamless-multi-agent-coordination-and-orchestration)
-- [Getting started](#getting-started)
-- [Model access](#model-access)
-- [Pre-Requisites](#pre-requisites)
-- [Setup](#setup)
+1. [Overview](#overview)
+2. [Key Objectives](#key-objectives)
+3. [Use Case: Intelligent Customer Support](#use-case-intelligent-customer-support)
+4. [Agents Involved](#agents-involved)
+5. [Runtime Chatbot](#runtime-chatbot)
+6. [Architecture Diagram](#architecture-diagram)
+7. [Demo Scope](#demo-scope)
+   - a. [Natural Language Inquiry Handling](#natural-language-inquiry-handling)
+   - b. [Order Tracking and Management](#order-tracking-and-management)
+   - c. [Personalized Product Recommendationsn](#personalized-product-recommendations)
+   - d. [Technical Issue Resolution](#technical-issue-resolution)
+   - e. [Persistent Customer Profile for Personalized Service](#persistent-customer-profile-for-personalized-service)
+   - f. [Dynamic Response and Tool Access](#dynamic-response-and-tool-access)
+   - g. [Seamless Multi-Agent Coordination and Orchestration](#seamless-multi-agent-coordination-and-orchestration)
+8. [Getting started](#getting-started)
+9 [Cost](#cost)
+10. [Model access](#model-access)
+11. [Pre-Requisites](#pre-requisites)
+12. [Setup](#setup)
    - [Clone repo & install dependencies](#clone-repo--install-dependencies)
    - [Bootstrapping Account](#bootstrapping-account)
    - [Setup website](#setup-website)
    - [Run webapp locally](#run-webapp-locally)
    - [Deploy Webapp to Amazon Cloudfront](#deploy-webapp-to-amazon-cloudfront)
-- [Cleanup](#cleanup)
+13. [Cleanup](#cleanup)
 
 
 
 ## Overview  
-This project focuses on developing and implementing robust multi-agent collaboration capabilities for Amazon Bedrock Agents. The goal is to enhance the platform's ability to handle complex, real-world business scenarios that require coordinated efforts across specialized AI agents. Multiple agents will gather information from various datasources by using semantic search, and creating SQL queries from natural language to fetch data from databases.
+This project focuses on developing and implementing robust multi-agent collaboration capabilities for Amazon Bedrock Agents. The goal is to enhance the platform's ability to handle complex, real-world business scenarios that require coordinated efforts across specialized AI agents. Multiple agents will gather information from various datasources by using semantic search, and creating SQL queries from natural language to fetch data from databases. Click [here](https://aws.storylane.io/share/otdlltvd8jz7) if interested in an interactive click through demo. 
 
 ### Key Objectives
 
@@ -55,11 +55,19 @@ To demonstrate the capabilities of our multi-agent system, we've developed an in
 ## Runtime Chatbot
 The runtime chatbot is a React-based website that uses a WebSocket API and a Lambda function architecture. The Lambda function uses the Amazon Bedrock Converse API to reason and retrieve relevant documents from the knowledge base, and uses action groups for text-t2-sql querying against an Amazon Athena database. Then, the app provides the final answer to users inquiring about products, troubleshooting, or purchase recommendations.
 
-## Architecture Diagram
+## Architecture Design
 ![Diagram](images/genai-mac-arch-diagram.png)
 
-## Storylane URL
-https://aws.storylane.io/share/otdlltvd8jz7
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+
+
 
 ## Demo Scope
 
@@ -91,6 +99,30 @@ This demo scope showcases the multi-agent system’s ability to deliver an effic
 
 ## Getting started
 Let's start by enabling the models we need for the application. Navigate to the Amazon Bedrock console, and enable the following models:
+
+## Cost
+You are responsible for the cost of the AWS services used while running this Guidance. As of October 2024, the cost for running this Guidance with the default settings in the US West (Oregon) AWS Region is approximately $606.14 per month for processing 100,000 requests with an input/output token count average of 700K.
+
+We recommend creating a [Budget](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html) through [AWS Cost Explorer](https://aws.amazon.com/aws-cost-management/aws-cost-explorer/) to help manage costs. Prices are subject to change. For full details, refer to the pricing webpage for each AWS service used in this Guidance.
+
+| AWS Service                                           | Dimensions                                | Cost [USD]  |
+|-------------------------------------------------------|-------------------------------------------|-------------|
+| EC2 Instance (t3.small)                               | Running an EC2 instance 24/7 per month    | \$17.74      |
+| AWS Lambda                                            | 100k Invocations per month                | ~\$0.20      |
+| Amazon Bedrock Anthropic Claude 3 Haiku ***(Input)*** | 300K tokens per month (~200K words on average) | \$75         |
+| Amazon Bedrock Anthropic Claude 3 Haiku ***(Output)***| 400K tokens per month (~280K words on average) | \$500        |
+| Amazon S3 (Simple Storage Service)                    | Total size of company reports is 1.1 KB   | <\$1         |
+| Amazon Athena                                         | \$5.00 per TB of data scanned              | <\$1         |
+| Amazon Bedrock Knowledge Base                         | Assumed cost based on usage (e.g., 100 queries per month at \$0.01 per query) | \$1          |
+| Amazon DynamoDB                                       | Read/Write Capacity Units (assumed low usage) | <\$1         |
+| AWS Lambda (additional for Supervisor Agent)          | Additional Invocations (if any)            | ~\$0.20      |
+| Amazon Athena (additional for querying S3 data)       | Additional data scanned (if any)           | <\$1         |
+| AWS Cognito                                           | User pool management (assumed low usage)   | <\$1         |
+| AWS CloudFront                                        | Data transfer out (assumed low usage)      | <\$1         |
+| AWS Certificate Manager                               | SSL/TLS certificates (free tier)           | \$0          |
+| Amazon S3 (additional for storing more data)          | Additional storage (if any)                | <\$1         |
+
+
 
 ### Model access
 
