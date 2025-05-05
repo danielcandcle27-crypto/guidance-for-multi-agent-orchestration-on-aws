@@ -118,8 +118,6 @@ We recommend creating a [Budget](https://docs.aws.amazon.com/cost-management/lat
 | AWS Lambda (additional for Supervisor Agent)          | Additional Invocations (if any)            | ~\$0.20      |
 | AWS Cognito                                           | User pool management (assumed low usage)   | <\$1         |
 | AWS CloudFront                                        | Data transfer out (assumed low usage)      | <\$1         |
-| AWS Certificate Manager                               | SSL/TLS certificates (free tier)           | \$0          |
-
 
 
 ### Model access
