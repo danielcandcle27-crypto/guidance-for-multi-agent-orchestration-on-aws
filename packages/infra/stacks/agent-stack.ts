@@ -251,7 +251,6 @@ export class BedrockAgentStack extends cdk.Stack {
       bucket: personalizationDataBucket,
       knowledgeBase: personalizationKB,
       dataSourceName: 'personalization-data',
-      chunkingStrategy: bedrock.ChunkingStrategy.fixedSize({ maxTokens: 300, overlapPercentage: 20 }),
     });
 
     const personalizationAgent = new bedrock.Agent(this, 'PersonalizationAgent', {
@@ -770,7 +769,6 @@ export class BedrockAgentStack extends cdk.Stack {
       bucket: productRecExistingBucket,
       knowledgeBase: productRecKB,
       dataSourceName: 'product-recommendation-data',
-      chunkingStrategy: bedrock.ChunkingStrategy.fixedSize({ maxTokens: 300, overlapPercentage: 20 }),
       inclusionPrefixes: ['prod_rec/']
     });
 
@@ -942,7 +940,7 @@ export class BedrockAgentStack extends cdk.Stack {
     const troubleshootExistingBucket = s3.Bucket.fromBucketName(
       this,
       'TroubleshootExistingBucket',
-      `genai-labs-ts-faq-unstr-${this.account}`
+      `genai-labs-ts-faq-unstr-${this.account}-${this.region}`
     );
 
     const troubleshootDataSource = new bedrock.S3DataSource(
@@ -952,10 +950,6 @@ export class BedrockAgentStack extends cdk.Stack {
         bucket: troubleshootExistingBucket,
         knowledgeBase: troubleshootKB,
         dataSourceName: 'troubleshoot-data',
-        chunkingStrategy: bedrock.ChunkingStrategy.fixedSize({
-          maxTokens: 300,
-          overlapPercentage: 20,
-        }),
       }
     );
 
