@@ -133,6 +133,7 @@ Navigate to the Amazon Bedrock console, and enable the following models:
 `Sonnet 3`
 `Haiku 3.5 V1`
 
+
 ![Diagram](images/model_access.png)
 
 
@@ -205,7 +206,7 @@ cdk bootstrap aws://{ACCOUNT_ID}/{REGION}
 
 Next up we will setup the website to run locally to make changes, then deploy the app to Cloudfront. This requires to generate the `.env` file locally which has all backend infra ARNs and several key resource identifiers. This can be easily done via a script
 
-Make sure to navigate to the packages/infra/config/***AppConfig.ts*** file and update the projectName, gitlabProject name, DEV, and PROD account numbers (You do not need to update PROD if you don't intend to use it).
+Make sure to navigate to the packages/infra/config/***AppConfig.ts*** file and update the **projectName**, and **currentAccount**.
 
 ```bash
 # from project root
