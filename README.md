@@ -130,6 +130,7 @@ Navigate to the Amazon Bedrock console, and enable the following models:
 `Nova Micro`
 `Sonnet 3.5 V1`
 `Sonnet 3.5 V2`
+`Sonnet 3`
 `Haiku 3.5 V1`
 
 ![Diagram](images/model_access.png)
