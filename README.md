@@ -58,16 +58,6 @@ The runtime chatbot is a React-based website that uses a WebSocket API and a Lam
 ## Architecture Design
 ![Diagram](images/genai-mac-arch-diagram.png)
 
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-
-
 
 ## Demo Scope
 

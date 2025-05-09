@@ -55,7 +55,8 @@ def get_s3_bucket_from_ssm():
         try:
             sts_client = boto3.client('sts')
             account_id = sts_client.get_caller_identity()['Account']
-            bucket_name = f'genai-athena-output-bucket-{account_id}'
+            region = boto3.session.Session().region_name
+            bucket_name = f'genai-athena-output-bucket-{account_id}-{region}'
             output_location = f's3://{bucket_name}/'
             
             # Verify the S3 bucket exists

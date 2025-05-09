@@ -12,6 +12,7 @@ import { CDKProps } from "../config/AppConfig";
 import { Key } from "aws-cdk-lib/aws-kms";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
+import { NagSuppressions } from "cdk-nag";
 
 interface BucketStackProps extends CDKProps {
   distributionDomainName: string;
@@ -241,7 +242,7 @@ def lambda_handler(event, context):
         # Store Athena output bucket in SSM - use consistent parameter name formatting
         ssm_client.put_parameter(
             Name="/athena-bucket",
-            Value=athena_output_bucket,
+            Value=f"s3://genai-athena-output-bucket-{account_number}-{region}/",
             Type="String",
             Overwrite=True
         )
@@ -560,10 +561,60 @@ def create_inventory_table(account_number, athena_output_bucket):
         resources: ["*"],
       })
     );
+    
+    // Add Lambda suppressions directly here
+    NagSuppressions.addResourceSuppressions(
+      setupLambda,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'This Lambda function requires these permissions to set up Athena databases and tables and upload sample data.'
+        },
+        {
+          id: 'AwsSolutions-L1',
+          reason: 'This Lambda function is using Python 3.12, which is a recent runtime version.'
+        },
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'Lambda function uses AWS managed AWSLambdaBasicExecutionRole policy for CloudWatch Logs access.'
+        }
+      ],
+      true
+    );
 
     // Finally, create a Custom Resource so that the Lambda is invoked once at deploy time
     new CustomResource(this, "SetupAthenaDataCR", {
       serviceToken: setupLambda.functionArn,
+    });
+    
+    // Add CDK Nag suppressions for the data buckets
+    this.addCdkNagSuppressions();
+  }
+  
+  /**
+   * Add CDK Nag suppressions for common issues in this stack
+   */
+  private addCdkNagSuppressions(): void {
+    // Suppress S3 access logging warnings for data buckets
+    const s3Buckets = [
+      this.macDataStrBucket,
+      this.personalizeUnstrBucket,
+      this.prodRecUnstrBucket,
+      this.tsFaqUnstrBucket,
+      this.athenaOutputBucket
+    ];
+    
+    s3Buckets.forEach(bucket => {
+      NagSuppressions.addResourceSuppressions(
+        bucket,
+        [
+          {
+            id: 'AwsSolutions-S1',
+            reason: 'These S3 buckets are used for data storage and sample data. Access logging is not required for this demo application.'
+          }
+        ],
+        true
+      );
     });
   }
 }

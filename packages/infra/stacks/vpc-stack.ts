@@ -1,7 +1,11 @@
-import { Stack } from "aws-cdk-lib";
+import { CustomResource, Duration, Stack } from "aws-cdk-lib";
 import { Construct } from "constructs";
-import { CDKProps } from "../config/AppConfig";
+import { CDKProps, lambdaArchitecture, lambdaRuntime } from "../config/AppConfig";
 import { FlowLogTrafficType, GatewayVpcEndpointAwsService, IpAddresses, Peer, Port, SecurityGroup, SubnetType, Vpc } from "aws-cdk-lib/aws-ec2";
+import { Code, Function } from "aws-cdk-lib/aws-lambda";
+import { Provider } from "aws-cdk-lib/custom-resources";
+import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
+import * as path from "path";
 
 export class VpcStack extends Stack {
     public vpc: Vpc;
@@ -61,6 +65,43 @@ export class VpcStack extends Stack {
             Peer.ipv4(this.vpc.vpcCidrBlock),
             Port.tcp(443),
             "Allow access from client"
-        )
+        );
+
+        // Create Lambda function for VPC default SG custom resource
+        const restrictDefaultSgFunction = new Function(this, 'RestrictDefaultSgFunction', {
+            runtime: lambdaRuntime,
+            architecture: lambdaArchitecture,
+            code: Code.fromAsset(path.join(__dirname, '../lambda/python/vpc-default-sg')),
+            handler: 'index.handler',
+            timeout: Duration.minutes(5),
+            description: 'Lambda function to restrict default security group of VPC',
+        });
+
+        // Allow the Lambda to modify security groups
+        restrictDefaultSgFunction.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: [
+                    'ec2:DescribeSecurityGroups',
+                    'ec2:RevokeSecurityGroupIngress',
+                    'ec2:RevokeSecurityGroupEgress',
+                ],
+                resources: ['*'],
+            })
+        );
+
+        // Create a provider to handle the custom resource lifecycle
+        const restrictDefaultSgProvider = new Provider(this, 'RestrictDefaultSgProvider', {
+            onEventHandler: restrictDefaultSgFunction,
+        });
+
+        // Create custom resource to restrict default SG
+        new CustomResource(this, 'RestrictDefaultSgCustomResource', {
+            serviceToken: restrictDefaultSgProvider.serviceToken,
+            properties: {
+                VpcId: this.vpc.vpcId,
+                Timestamp: Date.now().toString(), // Force update when redeployed
+            },
+        });
     }
 }

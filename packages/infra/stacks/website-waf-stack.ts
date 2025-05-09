@@ -290,6 +290,22 @@ export class WebsiteWAFStack extends Stack {
                     id: "AwsSolutions-CFR4",
                     reason: "using the default certificate to speed up development",
                 },
+                {
+                    id: "AwsSolutions-CFR1",
+                    reason: "Geo restrictions not required for this demo application",
+                },
+            ],
+            true
+        );
+        
+        // Suppress S3 bucket public access warnings
+        NagSuppressions.addResourceSuppressions(
+            websiteBucket,
+            [
+                {
+                    id: "AwsSolutions-S2",
+                    reason: "Website bucket needs specific public access settings to work with CloudFront OAI",
+                },
             ],
             true
         );

@@ -223,5 +223,29 @@ export class CognitoAuthStack extends Stack {
       description: "Cognito callback URL",
       exportName: `${props.projectName}-config-cognito-callback-url`,
     });
+    
+    // Add CDK Nag suppressions for Cognito issues
+    this.addCdkNagSuppressions();
+  }
+  
+  /**
+   * Add CDK Nag suppressions for common issues in this stack
+   */
+  private addCdkNagSuppressions(): void {
+    // Suppress Cognito MFA and advanced security warnings
+    NagSuppressions.addResourceSuppressions(
+      this.userPool,
+      [
+        {
+          id: 'AwsSolutions-COG2',
+          reason: 'MFA is not required for this demo application.'
+        },
+        {
+          id: 'AwsSolutions-COG3',
+          reason: 'Advanced security mode is not required for this demo application.'
+        }
+      ],
+      true
+    );
   }
 }

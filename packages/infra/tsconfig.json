@@ -1,17 +1,25 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     // Project structure
     "baseUrl": ".",
     "outDir": "dist",
 
-    // Include ES2020 features
-    "lib": ["es2020"],
+    // Include ES2022 features to support private identifiers
+    "lib": ["es2022"],
     // ...
     "types": ["node", "jest"],
     "typeRoots": ["./node_modules/@types", "../../node_modules/@types"],
+    
+    // Add paths to resolve version conflicts
+    "paths": {
+      "aws-cdk-lib": ["../../node_modules/aws-cdk-lib"],
+      "aws-cdk-lib/*": ["../../node_modules/aws-cdk-lib/*"],
+      "@cdklabs/generative-ai-cdk-constructs": ["../../node_modules/@cdklabs/generative-ai-cdk-constructs"],
+      "@cdklabs/generative-ai-cdk-constructs/*": ["../../node_modules/@cdklabs/generative-ai-cdk-constructs/*"]
+    },
     
     // strictness, etc.
     "declaration": true,
