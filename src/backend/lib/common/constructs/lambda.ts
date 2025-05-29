@@ -4,7 +4,7 @@ import {
     PythonLayerVersion,
     PythonLayerVersionProps,
 } from "@aws-cdk/aws-lambda-python-alpha";
-import { Architecture, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Architecture, Runtime, LayerVersion } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction, NodejsFunctionProps } from "aws-cdk-lib/aws-lambda-nodejs";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Construct } from "constructs";
@@ -62,9 +62,15 @@ export class CommonPythonFunction extends PythonFunction {
 
 export class CommonPythonPowertoolsFunction extends CommonPythonFunction {
     constructor(scope: Construct, id: string, props: CommonPythonFunctionProps) {
-        const powertoolsLayer = new CommonPythonLayerVersion(scope, `${id}PowertoolsLayer`, {
-            entry: path.join(__dirname, "..", "layers", "powertools"),
-        });
+        // Use the AWS managed Powertools layer instead of building our own
+        // The ARN format is arn:aws:lambda:{region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:{version}
+        // For Python 3.12 and ARM64, we use the appropriate layer version
+        const powertoolsLayer = LayerVersion.fromLayerVersionArn(
+            scope,
+            `${id}PowertoolsLayer`,
+            `arn:aws:lambda:${process.env.CDK_DEFAULT_REGION || 'us-east-1'}:017000801446:layer:AWSLambdaPowertoolsPythonV2:48`
+        );
+        
         super(scope, id, {
             ...props,
             layers: [powertoolsLayer, ...(props.layers || [])],

@@ -7,6 +7,9 @@ import { FrontendDeploymentStack, FrontendStack } from "./stacks/frontend";
 export class ApplicationStage extends Stage {
     constructor(scope: Construct, id: string, props: StageProps) {
         super(scope, id, props);
+        
+        // Set CDK_DEFAULT_REGION for the AWS PowerTools layer
+        process.env.CDK_DEFAULT_REGION = props.env?.region || 'us-east-1';
 
         const frontend = new FrontendStack(this, "frontend");
 
