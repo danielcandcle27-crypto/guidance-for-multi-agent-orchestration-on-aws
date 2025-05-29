@@ -1,10 +1,5 @@
 # Multi-agent Collaboration (Customer Support Assistant)
 
-## Storylane URL: 
-![Storylane URL](https://aws.storylane.io/share/otdlltvd8jz7)
-(Passcode: P05tR1VBedrock2024)
-
-
 ## Overview  
 This project focuses on developing and implementing robust multi-agent collaboration capabilities for Amazon Bedrock Agents. The goal is to enhance the platform's ability to handle complex, real-world business scenarios that require coordinated efforts across specialized AI agents. Multiple agents will gather information from various datasources by using semantic search, and creating SQL queries from natural language to fetch data from databases.
 
@@ -173,7 +168,7 @@ npm run i
 ### Bootstrapping Account
 
 ```bash
-cdk bootstrap aws://959664613099/us-east-1
+cdk bootstrap aws://{ACCOUNT_ID}/{REGION}
 ```
 
 
@@ -194,6 +189,24 @@ This starter kit includes ready-to-deploy, compliant and secure CDK and React ap
 To deploy the stack, select the option - ***3. Deploy CDK Stack(s) 🚀***. Select environment, then yes, and let it deploy.
 
 Next, select the option ***5. Deploy Frontend 🖥️***. Let it finish deploying. 
+
+### Amazon Athena
+- Before we run the app, we need to manually set the Amazon Athena output bucket (This will be automated on the next revision). In the AWS console, search for the Amazon Athena service, then navigate to the Athena management console. Validate that the ***Query your data with Trino SQL*** radio button is selected, then press ***Launch query editor***.
+![athena1](images/athena1.png)
+
+
+- Next, set the ***query result location*** with Amazon S3. Select the ***Settings*** tab, then the ***Manage*** button in the ***Query result location and encryption*** section.
+![athena2](images/athena2.png)
+
+
+- Add the S3 prefix below for the query results location, then select the ***Save*** button.
+```bash
+s3://dev-mac-demo-backend-storageathenaresultsbucket-xxx
+```
+![athena3](images/athena3.png)
+
+
+You are now ready to log into the application for testing.
 
 
 ### Run webapp locally

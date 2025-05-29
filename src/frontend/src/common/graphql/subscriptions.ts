@@ -18,6 +18,7 @@ export const onCreateChat = /* GraphQL */ `subscription OnCreateChat(
     human
     assistant
     trace
+    traceMetadata
     expiration
     id
     createdAt
@@ -40,6 +41,7 @@ export const onUpdateChat = /* GraphQL */ `subscription OnUpdateChat(
     human
     assistant
     trace
+    traceMetadata
     expiration
     id
     createdAt
@@ -62,6 +64,7 @@ export const onDeleteChat = /* GraphQL */ `subscription OnDeleteChat(
     human
     assistant
     trace
+    traceMetadata
     expiration
     id
     createdAt

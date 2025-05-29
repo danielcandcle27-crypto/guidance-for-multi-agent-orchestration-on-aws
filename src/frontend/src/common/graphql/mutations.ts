@@ -33,6 +33,7 @@ export const createChat = /* GraphQL */ `mutation CreateChat(
     human
     assistant
     trace
+    traceMetadata
     expiration
     id
     createdAt
@@ -55,6 +56,7 @@ export const updateChat = /* GraphQL */ `mutation UpdateChat(
     human
     assistant
     trace
+    traceMetadata
     expiration
     id
     createdAt
@@ -77,6 +79,7 @@ export const deleteChat = /* GraphQL */ `mutation DeleteChat(
     human
     assistant
     trace
+    traceMetadata
     expiration
     id
     createdAt

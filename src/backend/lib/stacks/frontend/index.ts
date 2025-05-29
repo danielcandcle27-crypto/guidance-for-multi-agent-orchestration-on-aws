@@ -18,7 +18,7 @@ import {
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
 import * as path from "path";
-import { LabsReactProject } from "../../common/constructs/codebuild";
+import { codeArtifactPolicies } from "../../common/constructs/codebuild-policies";
 import { CommonNodejsFunction } from "../../common/constructs/lambda";
 import { CommonBucket } from "../../common/constructs/s3";
 import { CommonStack } from "../../common/constructs/stack";
@@ -121,7 +121,7 @@ export class FrontendDeploymentStack extends CommonStack {
                 Object.entries(props.environmentVariables).map(([key, value]) => [key, { value }])
             );
 
-        const reactProject = new LabsReactProject(this, "reactProject", {
+        const reactProject = new codebuild.Project(this, "reactProject", {
             source: codebuild.Source.s3({
                 bucket: websiteAssets.bucket,
                 path: websiteAssets.s3ObjectKey,
@@ -167,6 +167,11 @@ export class FrontendDeploymentStack extends CommonStack {
                 },
             }),
         });
+        // Add CodeArtifact policies that were previously in LabsReactProject
+        codeArtifactPolicies.forEach(policy => {
+            reactProject.addToRolePolicy(policy);
+        });
+        
         reactProject.addToRolePolicy(
             new iam.PolicyStatement({
                 actions: ["cloudfront:CreateInvalidation"],

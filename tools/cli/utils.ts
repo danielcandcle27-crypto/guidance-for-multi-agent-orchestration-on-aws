@@ -132,15 +132,33 @@ export const refreshCredentials = async (stage: string) => {
         bye();
     }
 
-    console.log(blueBright(`\nRefreshing ${stage} credentials...`));
+    const profileName = getProfileName(stage);
+    console.log(blueBright(`\nVerifying ${stage} credentials for profile ${profileName}...`));
+    
     try {
-        await executeCommand(
-            `ada credentials update --provider=isengard --role Admin --once --account=${account?.number}`
-        );
-        console.log(greenBright(`\nRefreshed ${stage} credentials!`));
+        // Check if credentials are valid using STS get-caller-identity
+        await executeCommand(`aws sts get-caller-identity --profile ${profileName}`, true);
+        console.log(greenBright(`\nValid credentials found for ${stage} profile!`));
     } catch {
-        console.error(redBright(`\n🛑 Failed to refresh ${stage} credentials.`));
-        bye();
+        console.warn(redBright(`\nInvalid or expired credentials for profile ${profileName}.`));
+        
+        if (await promptConfirm(`Would you like to configure AWS profile for ${stage}?`)) {
+            console.log(blueBright(`\nRunning AWS configure for profile ${profileName}...`));
+            try {
+                // Interactive AWS CLI configure command
+                await executeCommand(`aws configure --profile ${profileName}`);
+                
+                // Verify the configuration worked
+                await executeCommand(`aws sts get-caller-identity --profile ${profileName}`, true);
+                console.log(greenBright(`\nSuccessfully configured ${stage} profile!`));
+            } catch {
+                console.error(redBright(`\n🛑 Failed to configure ${stage} profile.`));
+                bye();
+            }
+        } else {
+            console.error(redBright(`\n🛑 Valid AWS credentials required to proceed.`));
+            bye();
+        }
     }
 };
 
@@ -150,4 +168,22 @@ export const getProfileName = (stage: string): string => {
 
 export const getStackPrefix = (stage: string): string => {
     return `${stage}/${projectConfig.projectId}`;
+};
+
+/**
+ * Converts CDK stack path notation to CloudFormation-compatible stack names.
+ * CDK uses paths like "dev/mac-demo" but CloudFormation requires names without slashes.
+ */
+export const getCfnStackName = (cdkStackPath: string): string => {
+    // Replace all slashes with hyphens to make CloudFormation-compatible
+    return cdkStackPath.replace(/\//g, "-");
+};
+
+/**
+ * Gets a CloudFormation-compatible stack name directly from stage and optional suffix
+ */
+export const getCloudFormationSafeName = (stage: string, suffix?: string): string => {
+    const prefix = getStackPrefix(stage);
+    const cfnName = getCfnStackName(prefix);
+    return suffix ? `${cfnName}-${suffix}` : cfnName;
 };

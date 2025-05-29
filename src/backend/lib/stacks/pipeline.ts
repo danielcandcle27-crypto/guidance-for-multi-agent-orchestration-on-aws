@@ -9,7 +9,7 @@ import {
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { PresetStageType, projectConfig } from "../../../../config";
-import { LabsCodeBuildStep } from "../common/constructs/codebuild";
+import { codeArtifactPolicies } from "../common/constructs/codebuild-policies";
 import { CommonBucket } from "../common/constructs/s3";
 import { CommonStack } from "../common/constructs/stack";
 import { ApplicationStage } from "../stage";
@@ -109,7 +109,8 @@ export class PipelineStack extends CommonStack {
                     },
                 }),
             },
-            synth: new LabsCodeBuildStep("synth", {
+            synth: new pipelines.CodeBuildStep("synth", {
+                rolePolicyStatements: [...codeArtifactPolicies],
                 input: pipelines.CodePipelineSource.s3(sourceBucket, objectKey, {
                     trigger: codepipeline_actions.S3Trigger.EVENTS,
                     actionName: new codepipeline_actions.S3SourceAction({

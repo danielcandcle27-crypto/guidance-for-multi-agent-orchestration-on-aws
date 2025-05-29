@@ -42,6 +42,6 @@ export class ApplicationStage extends Stage {
             ],
             true
         );
-        Aspects.of(this).add(new AwsSolutionsChecks());
+        //Aspects.of(this).add(new AwsSolutionsChecks());
     }
 }

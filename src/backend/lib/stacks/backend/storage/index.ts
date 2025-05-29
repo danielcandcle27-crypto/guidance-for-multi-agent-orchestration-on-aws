@@ -1,5 +1,7 @@
 import { Database } from "@aws-cdk/aws-glue-alpha";
 import { aws_s3 as s3, aws_s3_deployment as s3_deployment, Stack } from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
+import { createGluePolicy } from "./glue-policies";
 import { CfnCrawler, CfnTable } from "aws-cdk-lib/aws-glue";
 import { ManagedPolicy, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import {
@@ -116,32 +118,24 @@ export class Storage extends Construct {
             const crawlerResource = new AwsCustomResource(this, `startCrawlerCustomResource${index}`, {
                 onCreate: startCrawlerCall,
                 onUpdate: startCrawlerCall,
-                policy: AwsCustomResourcePolicy.fromSdkCalls({
-                    resources: ["*"],
-                }),
+                policy: createGluePolicy(),
             });
             crawlerResource.node.addDependency(storageDeployment);
             crawlerResources.push(crawlerResource);
         });
 
         // Using Athena SQL to create tables with proper schema (more reliable than CfnTable)
-        // DISABLED FOR NOW - this was causing deployment errors
+        // This approach creates tables with proper column names instead of generic col0, col1, etc.
         
-        // Instead, we'll rely on the Glue Crawlers to create the tables with generic column names
-        // You can manually rename the columns in the Athena console after deployment
+        // Grant Athena permissions to access the results bucket
+        athenaResultsBucket.grantReadWrite(new ServicePrincipal('athena.amazonaws.com'));
         
-        // We're not using Athena custom resources due to persistent deployment issues
-        // with the following error: "Unable to verify/create output bucket"
-        
-        // Set up the proper sequence of dependencies for the crawlers only
-        
-        // Commented out Athena table creation code below for reference:
-        /*
         // Step 1: Drop existing orders table
         const dropOrdersTableQuery = this.createAthenaQueryResource(
             "DropOrdersTable",
             `DROP TABLE IF EXISTS ${orderManagementDatabase.databaseName}.orders;`,
-            athenaResultsBucket
+            athenaResultsBucket,
+            structuredDataBucket
         );
         
         // Step 2: Create orders table with proper column names
@@ -166,14 +160,16 @@ export class Storage extends Construct {
             )
             LOCATION 's3://${structuredDataBucket.bucketName}/${orderManagementDatabase.databaseName}/orders/'
             TBLPROPERTIES ('skip.header.line.count'='1');`,
-            athenaResultsBucket
+            athenaResultsBucket,
+            structuredDataBucket
         );
         
         // Step 3: Drop existing inventory table
         const dropInventoryTableQuery = this.createAthenaQueryResource(
             "DropInventoryTable",
             `DROP TABLE IF EXISTS ${orderManagementDatabase.databaseName}.inventory;`,
-            athenaResultsBucket
+            athenaResultsBucket,
+            structuredDataBucket
         );
         
         // Step 4: Create inventory table with proper column names
@@ -197,7 +193,8 @@ export class Storage extends Construct {
             )
             LOCATION 's3://${structuredDataBucket.bucketName}/${orderManagementDatabase.databaseName}/inventory/'
             TBLPROPERTIES ('skip.header.line.count'='1');`,
-            athenaResultsBucket
+            athenaResultsBucket,
+            structuredDataBucket
         );
         
         // Set up the proper sequence of dependencies for table creation
@@ -211,7 +208,6 @@ export class Storage extends Construct {
         // Ensure table creation happens after table drops
         createOrdersTableQuery.node.addDependency(dropOrdersTableQuery);
         createInventoryTableQuery.node.addDependency(dropInventoryTableQuery);
-        */
         
         this.structuredDataBucket = structuredDataBucket;
         this.athenaResultsBucket = athenaResultsBucket;
@@ -223,9 +219,10 @@ export class Storage extends Construct {
      * @param id Resource ID
      * @param query SQL query to execute
      * @param resultsBucket Bucket to store query results
+     * @param dataBucket Bucket containing the data for tables
      * @returns AwsCustomResource that executes the query
      */
-    private createAthenaQueryResource(id: string, query: string, resultsBucket: s3.Bucket): AwsCustomResource {
+    private createAthenaQueryResource(id: string, query: string, resultsBucket: s3.Bucket, dataBucket: s3.Bucket): AwsCustomResource {
         // Create a stable identifier based on query content hash to ensure consistency
         // This approach prevents the changing physical ID issues that can occur with timestamps
         const stackName = Stack.of(this).stackName;
@@ -242,6 +239,10 @@ export class Storage extends Construct {
                 ResultConfiguration: {
                     OutputLocation: `s3://${resultsBucket.bucketName}/deletion-${id}/`,
                 },
+                // Add database context even for simple queries to ensure permissions are correct
+                QueryExecutionContext: {
+                    Database: 'default'
+                }
             },
             // Use a static ID for deletion that doesn't depend on the current time
             physicalResourceId: PhysicalResourceId.of(`static-${stableId}`),
@@ -258,7 +259,11 @@ export class Storage extends Construct {
                 },
                 // Add query execution context with database specified
                 QueryExecutionContext: {
-                    Database: 'default' // Use default for drop/create database operations
+                    // Use the database name extracted from the query if it's a CREATE/DROP TABLE,
+                    // otherwise use 'default'. This helps ensure we're using the right database context.
+                    Database: query.includes('TABLE') ? 
+                        query.match(/\b(\w+)\.(\w+)\b/)?.[1] || 'default' : 
+                        'default'
                 }
             },
             // Use a stable physical ID for the resource based on content hash rather than timestamp
@@ -272,9 +277,53 @@ export class Storage extends Construct {
             // Use the simple query for delete to avoid complexities with deletion
             // This is CRITICAL for preventing stuck resources during stack deletion
             onDelete: simpleQueryCall,
-            policy: AwsCustomResourcePolicy.fromSdkCalls({
-                resources: AwsCustomResourcePolicy.ANY_RESOURCE,
+        policy: AwsCustomResourcePolicy.fromStatements([
+            new iam.PolicyStatement({
+                actions: [
+                    'athena:StartQueryExecution',
+                    'athena:GetQueryExecution',
+                    'athena:GetQueryResults'
+                ],
+                resources: ['*']
             }),
+            new iam.PolicyStatement({
+                actions: [
+                    's3:GetBucketLocation',
+                    's3:GetObject',
+                    's3:ListBucket',
+                    's3:ListBucketMultipartUploads',
+                    's3:ListMultipartUploadParts',
+                    's3:AbortMultipartUpload',
+                    's3:CreateBucket',
+                    's3:PutObject'
+                ],
+                resources: [
+                    resultsBucket.bucketArn,
+                    `${resultsBucket.bucketArn}/*`,
+                    // Also grant access to data bucket for table creation
+                    dataBucket.bucketArn,
+                    `${dataBucket.bucketArn}/*`
+                ]
+            }),
+            // Add Glue permissions needed for Athena to access the catalog
+            new iam.PolicyStatement({
+                actions: [
+                    'glue:CreateDatabase',
+                    'glue:GetDatabase',
+                    'glue:GetDatabases',
+                    'glue:CreateTable',
+                    'glue:GetTable',
+                    'glue:GetTables',
+                    'glue:UpdateTable',
+                    'glue:DeleteTable',
+                    'glue:BatchCreatePartition',
+                    'glue:GetPartition',
+                    'glue:GetPartitions',
+                    'glue:BatchGetPartition'
+                ],
+                resources: ['*']
+            })
+        ]),
         });
     }
     

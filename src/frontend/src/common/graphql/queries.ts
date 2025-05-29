@@ -15,6 +15,7 @@ export const getChat = /* GraphQL */ `query GetChat($id: ID!) {
     human
     assistant
     trace
+    traceMetadata
     expiration
     id
     createdAt
@@ -36,6 +37,7 @@ export const listChats = /* GraphQL */ `query ListChats(
       human
       assistant
       trace
+      traceMetadata
       expiration
       id
       createdAt
@@ -68,6 +70,7 @@ export const chatsBySessionId = /* GraphQL */ `query ChatsBySessionId(
       human
       assistant
       trace
+      traceMetadata
       expiration
       id
       createdAt

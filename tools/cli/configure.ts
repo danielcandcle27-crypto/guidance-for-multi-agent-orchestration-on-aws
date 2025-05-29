@@ -13,28 +13,45 @@ import {
     refreshCredentials,
 } from "./utils";
 
-const createAdaProfile = async (accountNumber: string, profileName: string) => {
+const createAwsProfile = async (accountNumber: string, profileName: string) => {
     try {
-        await executeCommand(`ada profile print --profile=${profileName}`, true);
+        // Check if profile exists and is valid
+        await executeCommand(`aws sts get-caller-identity --profile=${profileName}`, true);
         console.log(
             greenBright(
-                `\nAlready created ADA profile "${profileName}" for account ${accountNumber}.`
+                `\nAWS profile "${profileName}" for account ${accountNumber} already exists and is valid.`
             )
         );
     } catch {
         console.log(
-            blueBright(`\nCreating ADA profile "${profileName}" for account ${accountNumber}...`)
+            blueBright(`\nCreating AWS profile "${profileName}" for account ${accountNumber}...`)
         );
         try {
-            await executeCommand(
-                `ada profile add --profile=${profileName} --account=${accountNumber} --provider=isengard --role=Admin`
+            // Interactive AWS configure
+            await executeCommand(`aws configure --profile=${profileName}`);
+            
+            // Verify configuration
+            const identity = JSON.parse(
+                await executeCommand(`aws sts get-caller-identity --profile=${profileName}`, true)
             );
-            console.log(
-                greenBright(`\nCreated ADA profile "${profileName}" for account ${accountNumber}!`)
-            );
-        } catch {
+            
+            if (identity.Account === accountNumber) {
+                console.log(
+                    greenBright(`\nCreated and verified AWS profile for account ${accountNumber}!`)
+                );
+            } else {
+                console.warn(
+                    redBright(
+                        `\nWarning: Configured account ${identity.Account} doesn't match expected account ${accountNumber}.`
+                    )
+                );
+                if (!(await promptConfirm("Continue anyway?"))) {
+                    throw new Error("Account mismatch");
+                }
+            }
+        } catch (error) {
             throw new Error(
-                `\nFailed to create ADA profile "${profileName}" for account ${accountNumber}.`
+                `\nFailed to create AWS profile "${profileName}" for account ${accountNumber}.`
             );
         }
     }
@@ -81,101 +98,6 @@ const bootstrapAccount = async (account: AccountConfig, stage: string) => {
     }
 };
 
-const createMidwaySecret = async (account: AccountConfig, stage: string) => {
-    let arnPart = "";
-    try {
-        const describeSecretResponse = JSON.parse(
-            await executeCommand(
-                `aws secretsmanager describe-secret --secret-id ${
-                    projectConfig.projectId
-                }-midway-secret --region ${account.region} --profile=${getProfileName(stage)}`,
-                true
-            )
-        );
-        arnPart = describeSecretResponse["ARN"].split("-").pop();
-        console.log(
-            greenBright(`\nAlready created Midway secret for ${stage} account ${account.number}.`)
-        );
-    } catch {
-        console.log(
-            blueBright(`\nCreating Midway secret for ${stage} account ${account.number}...`)
-        );
-        try {
-            let secret = "NONE";
-            if (Object.values(PresetStageType).includes(stage as PresetStageType)) {
-                do {
-                    if (secret !== "NONE" && secret.length < 40) {
-                        console.warn(
-                            redBright(
-                                `\nInvalid Midway secret token. Token length must be at least 40 characters long. Try again...`
-                            )
-                        );
-                    }
-                    secret = await promptSecret(
-                        `Paste Midway secret token for ${stage} account ${account.number}:`
-                    );
-                } while (secret.length < 40);
-            } else {
-                console.log(
-                    blueBright(
-                        `\nSandbox account detected. Getting Midway secret from dev account...`
-                    )
-                );
-                const getSecretResponse = JSON.parse(
-                    await executeCommand(
-                        `aws secretsmanager get-secret-value --secret-id ${
-                            projectConfig.projectId
-                        }-midway-secret --region ${
-                            projectConfig.accounts[PresetStageType.Dev].region
-                        } --profile=${getProfileName(PresetStageType.Dev)}`,
-                        true
-                    )
-                );
-                secret = JSON.parse(getSecretResponse["SecretString"])["clientID"];
-            }
-
-            const createSecretResponse = JSON.parse(
-                await executeCommand(
-                    `aws secretsmanager create-secret --name ${
-                        projectConfig.projectId
-                    }-midway-secret --region ${
-                        account.region
-                    } --description "Midway auth secret" --secret-string "{\\"clientID\\":\\"${secret}\\"}" --profile=${getProfileName(
-                        stage
-                    )}`,
-                    true
-                )
-            );
-            arnPart = createSecretResponse["ARN"].split("-").pop();
-
-            console.log(
-                greenBright(`\nCreated Midway secret for ${stage} account ${account.number}!`)
-            );
-        } catch {
-            throw new Error(
-                `\nFailed to create Midway secret for ${stage} account ${account.number}.`
-            );
-        }
-    }
-
-    projectConfig.accounts[stage] = {
-        ...projectConfig.accounts[stage],
-        midwaySecretId: arnPart,
-    };
-    try {
-        writeFileSync(projectConfigPath, JSON.stringify(projectConfig, null, 4) + "\n");
-        console.log(
-            greenBright(
-                `\nUpdated Midway secret in config file for ${stage} account ${account.number}!`
-            )
-        );
-    } catch {
-        throw new Error(
-            `\nFailed to update Midway secret in config file for ${stage} account ${account.number}.`
-        );
-    }
-};
-
 const initializeStage = async (stage: string) => {
     console.log(blueBright(bold(`\nInitializing ${stage} account...`)));
 
@@ -186,13 +108,9 @@ const initializeStage = async (stage: string) => {
     }
 
     try {
-        await createAdaProfile(account.number, getProfileName(stage));
+        await createAwsProfile(account.number, getProfileName(stage));
 
         await bootstrapAccount(account, stage);
-
-        if (projectConfig.midway) {
-            await createMidwaySecret(account, stage);
-        }
 
         console.log(greenBright(bold(`\nInitialized ${stage} account!`)));
     } catch (error) {
