@@ -157,7 +157,10 @@ export const connectWebSocket = (
       ? `ws://${window.location.host}/api/ws/${sessionId}` 
       : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws/${sessionId}`;
     
-    console.log(`Creating new websocket connection to ${wsUrl} (attempt ${connectionAttempts[connId]})`);
+    console.log(`⚠️ DEBUG - WebSocket connection: ${wsUrl} (attempt ${connectionAttempts[connId]})`);
+    console.log(`⚠️ DEBUG - Session ID: ${sessionId}`);
+    console.log(`⚠️ DEBUG - Model ID: ${modelId || 'not provided'}`);
+    console.log(`⚠️ DEBUG - NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
     
     // Create new connection
     const ws = new WebSocket(wsUrl);

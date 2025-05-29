@@ -31,6 +31,60 @@ const apiConfig = {
     },
 };
 
+// Log environment variables for debugging (with sensitive parts redacted)
+console.log("Environment variables loaded:", {
+    GRAPH_API_URL: import.meta.env.VITE_GRAPH_API_URL || "not set",
+    USER_POOL_ID: import.meta.env.VITE_USER_POOL_ID ? "set (redacted)" : "not set",
+    USER_POOL_CLIENT_ID: import.meta.env.VITE_USER_POOL_CLIENT_ID ? "set (redacted)" : "not set",
+    IDENTITY_POOL_ID: import.meta.env.VITE_IDENTITY_POOL_ID ? "set (redacted)" : "not set",
+    REGION: import.meta.env.VITE_REGION || "not set",
+    STORAGE_BUCKET_NAME: import.meta.env.VITE_STORAGE_BUCKET_NAME || "not set"
+});
+
+// Try to manually set the AppSync URL if it's missing or set to auto-discover
+// Hard-code the AppSync URL for testing - the URL was broken in the configuration
+const graphApiUrl = "https://YOUR-API-ID-HERE.appsync-api.YOUR-REGION-HERE.amazonaws.com/graphql";
+
+// Force diag log mode
+const diagMode = true;
+console.log("🔍 DIAGNOSTIC MODE ENABLED - checking for AppSync errors");
+
+// Check if we have any API endpoints from CloudFormation outputs saved in localStorage
+const savedEndpoints = localStorage.getItem('appSyncEndpoints');
+if (savedEndpoints) {
+  try {
+    const endpoints = JSON.parse(savedEndpoints);
+    console.log("✅ Found saved AppSync endpoints:", endpoints);
+    if (endpoints.graphApiUrl) {
+      console.log("📋 Using saved GraphQL URL:", endpoints.graphApiUrl);
+    }
+  } catch (e) {
+    console.error("❌ Error parsing saved endpoints:", e);
+  }
+}
+
+if (diagMode) {
+  // Add event listeners to capture any AWS SDK errors
+  window.addEventListener('error', function(event) {
+    console.log('🛑 GLOBAL ERROR:', event.error);
+    if (event.error && event.error.message && 
+        (event.error.message.includes('AppSync') || 
+         event.error.message.includes('GraphQL') || 
+         event.error.message.includes('API'))) {
+      console.error('🔴 AppSync API Error Detected:', event.error);
+    }
+  });
+
+  // Debug AWS amplify config
+  // Use type assertion to avoid TypeScript errors
+  const windowWithAWS = window as any;
+  if (windowWithAWS.AWS) {
+    console.log('🔍 AWS SDK Config:', windowWithAWS.AWS.config);
+  } else {
+    console.log('⚠️ AWS SDK not found on window object');
+  }
+}
+
 Amplify.configure(
     {
         Auth: {
@@ -44,7 +98,7 @@ Amplify.configure(
         },
         API: {
             GraphQL: {
-                endpoint: import.meta.env.VITE_GRAPH_API_URL,
+                endpoint: graphApiUrl,
                 defaultAuthMode: "iam", // Allow API calls with IAM roles for unauthenticated access
             },
         },
@@ -66,6 +120,9 @@ Amplify.configure(
         },
     }
 );
+
+// Log Amplify configuration (without sensitive data)
+console.log("Amplify configured with GraphQL endpoint:", graphApiUrl);
 
 export default function App() {
     const { authStatus } = useAuthenticator((context) => [context.authStatus]);

@@ -238,9 +238,16 @@ export class FrontendDeploymentStack extends CommonStack {
             const outputKey = key.toLocaleLowerCase();
             const outputId = outputKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
             const outputSuffix = outputKey.replace(/_/g, "-");
+            
+            // Add "vite-" prefix to export name if the key starts with VITE_
+            // This ensures the develop.ts script can find these values
+            const exportName = key.startsWith("VITE_") 
+                ? `${outputPrefix}-vite-${outputSuffix}`
+                : `${outputPrefix}-${outputSuffix}`;
+                
             new CfnOutput(this, outputId, {
                 value: value,
-                exportName: `${outputPrefix}-${outputSuffix}`,
+                exportName: exportName,
             });
         });
     }
