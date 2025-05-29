@@ -89,10 +89,13 @@ export class Storage extends Construct {
                 exclusions: []
             };
             
-            // Remove exclusions for order_management to allow the crawler to discover all tables with proper schemas
-            // Previously we were excluding orders and inventory tables, which caused them to have generic column names (col0, col1, etc.)
+            // Add exclusions for order_management to prevent duplicate table creation
+            // We're already creating these tables explicitly with Athena SQL queries with proper column names
             if (database.databaseName === "order_management") {
-                crawlerTargets.exclusions = [];
+                crawlerTargets.exclusions = [
+                    `s3://${structuredDataBucket.bucketName}/order_management/orders/**`,
+                    `s3://${structuredDataBucket.bucketName}/order_management/inventory/**`
+                ];
             }
 
             const crawler = new CfnCrawler(this, `crawler${index}`, {

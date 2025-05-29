@@ -177,10 +177,7 @@ const createLocalEnvironment = async (stage: string): Promise<boolean> => {
     // Create CloudFormation client
     const cfClient = new CloudFormationClient({
         region,
-        credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-        }
+        profile: getProfileName(stage)
     });
     
     // Try each alternative name with CloudFormation API
@@ -214,6 +211,7 @@ const createLocalEnvironment = async (stage: string): Promise<boolean> => {
             // Create CloudFormation client
             const cfClient = new CloudFormationClient({
                 region,
+                profile: getProfileName(stage)
             });
             
             const response = await cfClient.send(new ListStacksCommand({
