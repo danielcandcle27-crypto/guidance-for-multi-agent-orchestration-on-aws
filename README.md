@@ -167,13 +167,13 @@ Install the required dependencies for the project
 ```bash
 cd {root_directory}
 
-npm run installs
+npm run i
 ```
 
 ### Bootstrapping Account
 
 ```bash
-cdk bootstrap aws://ACCOUNT_ID/REGION
+cdk bootstrap aws://959664613099/us-east-1
 ```
 
 

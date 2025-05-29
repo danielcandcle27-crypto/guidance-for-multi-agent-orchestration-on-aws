@@ -9,10 +9,6 @@
         "dev": {
             "number": "{ACCOUNT_NUMBER}",
             "region": "us-west-2"
-        },
-        "prod": {
-            "number": "{ACCOUNT_NUMBER}",
-            "region": "us-west-2"
         }
     }
 }
