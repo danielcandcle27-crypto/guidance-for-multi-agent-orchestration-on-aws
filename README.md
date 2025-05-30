@@ -67,13 +67,13 @@ The runtime chatbot is a React-based website that uses a WebSocket API and a Lam
 
 4. The ***Amazon Bedrock*** Supervisor Agent (Main) analyzes the user query to determine intent and routes it to the appropriate sub agent. This central orchestrator maintains context across the conversation and ensures requests are handled by the most suitable sub agent.
 
-4a. For order-related queries, the Order Management Agent retrieves data from the order management database in ***Amazon Athena***, accessing orders and inventory tables through its ***Action Groups*** that execute SQL queries and format structured responses about order status, shipping details, and inventory availability.
+4. a. For order-related queries, the Order Management Agent retrieves data from the order management database in ***Amazon Athena***, accessing orders and inventory tables through its ***Action Groups*** that execute SQL queries and format structured responses about order status, shipping details, and inventory availability.
 
-4b. When product recommendations are needed, this specialized agent accesses the product recommendation database in Athena while its Knowledge Base provides unstructured customer feedback data from S3, with Action Groups performing recommendation algorithms and formatting product suggestions with relevant details.
+4. b. When product recommendations are needed, this specialized agent accesses the product recommendation database in Athena while its Knowledge Base provides unstructured customer feedback data from S3, with Action Groups performing recommendation algorithms and formatting product suggestions with relevant details.
 
-4c. For technical issues, the Troubleshooting Agent accesses its Knowledge Base containing FAQs and Troubleshooting Guide document collections, using vector search capabilities to match customer issues with relevant troubleshooting content and retrieve step-by-step solutions without requiring Action Groups.
+4. c. For technical issues, the Troubleshooting Agent accesses its Knowledge Base containing FAQs and Troubleshooting Guide document collections, using vector search capabilities to match customer issues with relevant troubleshooting content and retrieve step-by-step solutions without requiring Action Groups.
 
-4d. For personalization needs, the Personalization Agent accesses the personalization database in Athena, querying the customers preferences table through Action Groups that execute tailored SQL queries, perform preference analysis, and format responses. Its Knowledge Base contains browser history data from S3 that reveals actual customer behavior patterns, complementing the structured data to create a comprehensive view of individual customer profiles and past interactions.
+4. d. For personalization needs, the Personalization Agent accesses the personalization database in Athena, querying the customers preferences table through Action Groups that execute tailored SQL queries, perform preference analysis, and format responses. Its Knowledge Base contains browser history data from S3 that reveals actual customer behavior patterns, complementing the structured data to create a comprehensive view of individual customer profiles and past interactions.
 
 5. Sub agents construct and execute SQL queries against Amazon Athena which uses the AWS Glue Data Catalog to understand the schema and location of data, then queries the data directly in Amazon S3 without requiring data movement or transformation.
 
