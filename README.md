@@ -172,11 +172,11 @@ Next, select the option ***5. Deploy Frontend 🖥️***. Let it finish deployin
 
 ### Amazon Athena
 - Before we run the app, we need to manually set the Amazon Athena output bucket (This will be automated on the next revision). In the AWS console, search for the Amazon Athena service, then navigate to the Athena management console. Validate that the ***Query your data with Trino SQL*** radio button is selected, then press ***Launch query editor***.
-![athena1](images/athena1.png)
+![athena1](docs/kit/images/athena1.png)
 
 
 - Next, set the ***query result location*** with Amazon S3. Select the ***Settings*** tab, then the ***Manage*** button in the ***Query result location and encryption*** section.
-![athena2](images/athena2.png)
+![athena2](docs/kit/images/athena2.png)
 
 
 - Add the S3 prefix below for the query results location, then select the ***Save*** button.
@@ -199,9 +199,10 @@ Now, visit <http://localhost:3000> on a browser of choice (Chrome/Firefox are re
 
 If you receive a blank screen, refresh the page.
 
----
+You also have a the cloudfront urlcreated in the terminal to access the application.
 
-You can also see that you have a cloudfront url in the terminal that you can access the application.
+
+---
 
 
 ## Authors and acknowledgment
