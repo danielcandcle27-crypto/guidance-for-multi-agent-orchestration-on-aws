@@ -25,11 +25,6 @@ To demonstrate the capabilities of our multi-agent system, we've developed an in
 
 ## Architecture Diagram
 
-![Diagram1](docs/kit/images/architecture.drawio.png)
-
-
-Here is another diagram breaking down the workflow:
-
 ![Diagram2](docs/kit/images/genai-mac-arch-diagram.png)
 
 1. The user accesses the web application through **AWS WAF*** and ***Amazon CloudFront***, which delivers content from the Amazon S3 Website bucket, while Amazon Cognito handles authentication.
