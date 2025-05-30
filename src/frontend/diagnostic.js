@@ -1,146 +1,141 @@
-// AppSync API Diagnostic Tool
-// Run with: node diagnostic.js
-
-// Check for any stored AppSync URL in localStorage
-function checkLocalStorage() {
-  try {
-    console.log("🔍 Checking localStorage for saved AppSync endpoints...");
-    
-    // Mock localStorage for NodeJS environment
-    const localStorage = {
-      getItem: (key) => {
-        try {
-          // Try to load from a local file if running in Node
-          const fs = require('fs');
-          if (fs.existsSync('./.endpoints')) {
-            return fs.readFileSync('./.endpoints', 'utf8');
-          }
-        } catch (e) {
-          console.log("❌ Error reading endpoints file:", e);
-        }
-        return null;
-      }
-    };
-    
-    const savedEndpoints = localStorage.getItem('appSyncEndpoints');
-    if (savedEndpoints) {
-      try {
-        const endpoints = JSON.parse(savedEndpoints);
-        console.log("✅ Found saved AppSync endpoints:", endpoints);
-        return endpoints.graphApiUrl;
-      } catch (e) {
-        console.error("❌ Error parsing saved endpoints:", e);
-      }
-    } else {
-      console.log("❌ No saved AppSync endpoints found");
-    }
-  } catch (e) {
-    console.error("Error checking localStorage:", e);
-  }
-  return null;
-}
-
-// Test direct AppSync connection
-async function testAppSyncConnection(apiUrl) {
-  console.log(`\n🔄 Testing connection to AppSync API: ${apiUrl}`);
-  
-  try {
-    // Test if we can make a simple request
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          query TestConnection {
-            __typename
-          }
-        `
-      })
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log("✅ Connection successful:", data);
-      return true;
-    } else {
-      console.log("❌ Connection failed with status:", response.status);
-      const errorData = await response.text();
-      console.log("Error response:", errorData);
-      return false;
-    }
-  } catch (e) {
-    console.error("❌ Connection error:", e);
-    return false;
-  }
-}
-
-// Test subscription setup
-function testSubscription(apiUrl) {
-  console.log(`\n🔄 Testing subscription to AppSync API: ${apiUrl}`);
-  
-  try {
-    console.log("⚠️ WebSockets are not directly testable in Node environment");
-    console.log("👉 Check browser console for subscription errors");
-    console.log("👉 Common subscription errors:");
-    console.log("   - Missing or incorrect API URL");
-    console.log("   - Authorization errors (IAM/Cognito)");
-    console.log("   - CORS issues preventing WebSocket connection");
-    console.log("   - Network connectivity problems");
-    
-    return false;
-  } catch (e) {
-    console.error("❌ Subscription test error:", e);
-    return false;
-  }
-}
-
-// Find the AppSync API URL
-async function findAppSyncUrl() {
-  console.log("\n🔍 Looking for AppSync API URL...");
-  
-  // First check localStorage (or .endpoints file)
-  const localStorageUrl = checkLocalStorage();
-  if (localStorageUrl) {
-    console.log("📋 Found URL in localStorage:", localStorageUrl);
-    return localStorageUrl;
-  }
-  
-  // Try fallback hardcoded URL
-  console.log("⚠️ No URL found in storage, using fallback");
-  return "https://YOUR-API-ID-HERE.appsync-api.YOUR-REGION-HERE.amazonaws.com/graphql";
-}
+// diagnostic.js - WebSocket connection diagnostic script
+// Import the multiWebsocket utilities for testing
+import { connectWebSocket, debugWebSocketConnection, generateConnectionId } from './src/utilities/multiWebsocket';
+import { v4 as uuidv4 } from 'uuid';
 
 // Main diagnostic function
-async function runDiagnostic() {
-  console.log("🔧 AppSync API Diagnostic Tool 🔧");
-  console.log("=================================");
+export async function diagnoseWebSocketConnection() {
+  console.log('🔧 Starting WebSocket Connection Diagnostics');
+  console.log('===========================================');
   
-  // Step 1: Find the API URL
-  const apiUrl = await findAppSyncUrl();
+  // Create a unique session ID for testing
+  const sessionId = uuidv4();
+  console.log(`Generated test session ID: ${sessionId}`);
   
-  // Step 2: Test direct connection
-  await testAppSyncConnection(apiUrl);
-  
-  // Step 3: Test subscription
-  testSubscription(apiUrl);
-  
-  console.log("\n✅ Diagnostic completed");
-  console.log("Browser checks to perform:");
-  console.log("1. Open browser console");
-  console.log("2. Look for errors related to AppSync, GraphQL, or subscriptions");
-  console.log("3. Check if WebSocket connections are established");
-  console.log("4. Verify that AppSync API URL is correct");
+  try {
+    // Run the environment and auth checks
+    await debugWebSocketConnection(sessionId);
+    
+    // Test creating an actual connection
+    console.log('\n🔌 Testing WebSocket Connection:');
+    const ws = await connectWebSocket(sessionId);
+    
+    if (ws) {
+      console.log('✅ WebSocket connection created successfully');
+      console.log('WebSocket readyState:', getReadyStateText(ws.readyState));
+      
+      // Register a test message handler
+      const connId = generateConnectionId(sessionId);
+      console.log(`Setting up test message handler for ${connId}`);
+      
+      // Create a one-time message handler to verify communication works
+      const messageHandler = (data) => {
+        console.log('✅ TEST MESSAGE RECEIVED:', data);
+        console.log('Connection test successful - messages can be received!');
+      };
+      
+      // Add event listener directly on the WebSocket
+      ws.addEventListener('message', (event) => {
+        try {
+          console.log('📥 Raw message received during test:', event.data);
+        } catch (e) {
+          console.error('Error handling raw message:', e);
+        }
+      });
+      
+      // Force error handler to catch any WebSocket errors
+      ws.addEventListener('error', (error) => {
+        console.error('❌ WebSocket Error during test:', error);
+      });
+
+      // Wait a bit to see if we get any messages
+      console.log('Waiting 5 seconds to check for messages...');
+      
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          // Check final connection state
+          if (ws.readyState === WebSocket.OPEN) {
+            console.log('✅ Connection remains open after 5 seconds');
+            console.log('🎉 Diagnostic complete - Connection appears to be working!');
+            resolve(true);
+          } else {
+            console.log('❌ Connection is no longer open:', getReadyStateText(ws.readyState));
+            console.log('🔍 Diagnostic complete - Connection issues detected');
+            resolve(false);
+          }
+        }, 5000);
+      });
+    } else {
+      console.log('❌ Failed to create WebSocket connection');
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Error during WebSocket diagnostics:', error);
+    return false;
+  }
 }
 
-// Run the diagnostic
-runDiagnostic();
+// Helper function to convert WebSocket readyState to text
+function getReadyStateText(readyState) {
+  switch(readyState) {
+    case WebSocket.CONNECTING: return 'CONNECTING (0)';
+    case WebSocket.OPEN: return 'OPEN (1)';
+    case WebSocket.CLOSING: return 'CLOSING (2)';
+    case WebSocket.CLOSED: return 'CLOSED (3)';
+    default: return `UNKNOWN (${readyState})`;
+  }
+}
 
-console.log("\n📝 Manual steps to resolve common issues:");
-console.log("1. Verify API URL in environment variables");
-console.log("2. Check network connectivity to AppSync endpoint");
-console.log("3. Verify IAM permissions are correct");
-console.log("4. Check CloudFormation for API outputs");
-console.log("5. Regenerate GraphQL schema and types");
-console.log("6. Try refreshing the local environment using CLI tools");
+// Function to test AppSync header formatting
+export function testAppSyncHeaderFormat() {
+  console.log('🔍 Testing AppSync Header Formatting');
+  
+  // Test data
+  const testToken = "test_token_value";
+  const testApiUrl = import.meta.env.VITE_GRAPH_API_URL || "https://example.appsync-api.region.amazonaws.com/graphql";
+  
+  try {
+    // Create authentication header object
+    const authHeader = {
+      host: new URL(testApiUrl).host,
+      Authorization: testToken,
+      'x-api-key': import.meta.env.VITE_GRAPH_API_KEY || ''
+    };
+    
+    // Base64 encode the authorization header
+    const authHeaderString = JSON.stringify(authHeader);
+    const encodedAuth = btoa(unescape(encodeURIComponent(authHeaderString)));
+    
+    // Log results
+    console.log('Test Results:');
+    console.log('- Original Header:', authHeader);
+    console.log('- JSON String:', authHeaderString);
+    console.log('- Base64 Encoded:', encodedAuth);
+    console.log('- URL with query param:', `wss://example.com?header=${encodedAuth}`);
+    
+    return {
+      authHeader,
+      authHeaderString,
+      encodedAuth
+    };
+  } catch (error) {
+    console.error('❌ Error testing AppSync header format:', error);
+    return null;
+  }
+}
+
+// Run the diagnostic if called directly
+if (typeof window !== 'undefined') {
+  // Expose to window to allow running from console
+  window.diagnoseWebSocket = diagnoseWebSocketConnection;
+  window.testAppSyncHeader = testAppSyncHeaderFormat;
+  
+  console.log('🔧 WebSocket diagnostic tools loaded');
+  console.log('Run diagnoseWebSocket() to test the connection');
+  console.log('Run testAppSyncHeader() to test header formatting');
+}
+
+export default {
+  diagnoseWebSocketConnection,
+  testAppSyncHeaderFormat
+};

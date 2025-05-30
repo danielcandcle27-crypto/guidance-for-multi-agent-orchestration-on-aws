@@ -28,7 +28,6 @@ import { resetProcessingState, toggleFlowAnimations, areFlowAnimationsFrozen, se
 import { useTraceTimer } from './timerEffect';
 import { findTraceGroupByAgentId, getTraceGroupStartTime, parseAttributeAsNumber } from '../../../utilities/safeTraceUtils';
 import ActivityStatusLoader from './ActivityStatusLoader';
-import '../../../common/components/markdown-styles.css';
 
 type Message = { 
     id: string; 
@@ -194,26 +193,21 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
 
     // Subscribe to chat updates
     useEffect(() => {
-        console.log("🔄 Setting up GraphQL subscription for chat updates with sessionId:", sessionId);
-        
         // Set connection status to connected when subscription starts
         setConnectionStatus("connected");
         
         // Generate a connection ID for AgentFlow
         const connId = generateConnectionId(sessionId);
-        console.log("🔌 Generated connection ID:", connId);
         
-        try {
-            console.log("⏳ Attempting to subscribe to onUpdateChat...");
-            const subscription = client
-                .graphql({
-                    query: onUpdateChat,
-                })
-                .subscribe({
-                    next: ({ data }) => {
-                        console.log("✅ Received chat update:", data);
-                        // Log raw data with special prefix for easy filtering
-                        console.log("%cRAW DATA: AppSync/GraphQL Response", "background: #333; color: #bada55; padding: 2px;", data);
+        const subscription = client
+            .graphql({
+                query: onUpdateChat,
+            })
+            .subscribe({
+                next: ({ data }) => {
+                    console.log("Received chat update:", data);
+                    // Log raw data with special prefix for easy filtering
+                    console.log("%cRAW DATA: AppSync/GraphQL Response", "background: #333; color: #bada55; padding: 2px;", data);
                     // Ensure connection status is set to connected on receiving data
                     setConnectionStatus("connected");
                     

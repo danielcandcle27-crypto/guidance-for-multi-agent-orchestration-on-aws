@@ -143,30 +143,16 @@ const createLocalEnvironment = async (stage: string): Promise<boolean> => {
     console.log(blueBright(bold("\nCreating local environment...")));
 
     const region = projectConfig.accounts[stage].region;
+    const frontendPath = path.join(__dirname, "..", "..", "src", "frontend");
 
     // get stack outputs
     let stackOutputs: Output[] = [];
     
-    // Create an array of possible stack names to try
-    // We'll try different formats because of the CDK vs CloudFormation naming conventions
+    // Only check the specific stack format known to work
     const frontendDeployment = "frontendDeployment";
-    const cdkStackPath = `${getStackPrefix(stage)}-${frontendDeployment}`; // CDK logical path format
-    const cfnStackName = getCfnStackName(cdkStackPath); // CloudFormation physical name format
+    const stackName = `${stage}-${projectConfig.projectId}-${frontendDeployment}`; // dev-mac-demo-frontendDeployment
     
-    // Include exact format seen in user's CloudFormation (dev-mac-demo-frontendDeployment)
-    const alternativeNames = [
-        cfnStackName, // CloudFormation compatible name (most likely to match)
-        `${stage}-${projectConfig.projectId}-${frontendDeployment}`, // Format from user's stack list
-        cdkStackPath, // Original CDK path 
-        getCloudFormationSafeName(stage, frontendDeployment), // From helper
-        `${stage}-${frontendDeployment}`, // Simplified alt format
-        `${projectConfig.projectId}-${stage}-${frontendDeployment}`, // Reverse order
-    ];
-    
-    console.log(blueBright("\nWill try these stack naming patterns:"));
-    alternativeNames.forEach((name, i) => {
-        console.log(`${i+1}. ${name}`);
-    });
+    console.log(blueBright(`\nChecking for stack: ${stackName}`));
     
     // Skip the CDK outputs approach which has been failing and go directly to CloudFormation API
     console.log(blueBright("\nQuerying CloudFormation API directly for stack information..."));
@@ -180,24 +166,18 @@ const createLocalEnvironment = async (stage: string): Promise<boolean> => {
         profile: getProfileName(stage)
     });
     
-    // Try each alternative name with CloudFormation API
-    for (const name of alternativeNames) {
-        if (stackFound) break;
-        
-        console.log(blueBright(`\nTrying stack name: ${name}`));
-        try {
-            const command = new DescribeStacksCommand({
-                StackName: name,
-            });
-            const response = await cfClient.send(command);
-            stackOutputs = response.Stacks?.[0].Outputs ?? [];
-            console.log(greenBright(`\n✅ Found stack with name: ${name}`));
-            successfulStackName = name;
-            stackFound = true;
-            break;
-        } catch (err) {
-            console.log(`Stack with name "${name}" not found, trying next alternative...`);
-        }
+    // Check the stack name with CloudFormation API
+    try {
+        const command = new DescribeStacksCommand({
+            StackName: stackName,
+        });
+        const response = await cfClient.send(command);
+        stackOutputs = response.Stacks?.[0].Outputs ?? [];
+        console.log(greenBright(`\n✅ Found stack with name: ${stackName}`));
+        successfulStackName = stackName;
+        stackFound = true;
+    } catch (err) {
+        console.log(redBright(`\n❌ Stack with name "${stackName}" not found`));
     }
     
     // If we still didn't find the stack, display diagnostics and list available stacks
@@ -301,8 +281,6 @@ const createLocalEnvironment = async (stage: string): Promise<boolean> => {
     // We found outputs, continue with environment setup
     console.log(greenBright(`\nSuccessfully found stack: ${successfulStackName}`));
 
-    const frontendPath = path.join(__dirname, "..", "..", "src", "frontend");
-
     // create environment file
     // When using CDK outputs, we need to handle keys directly
     const environmentVariables = stackOutputs
@@ -379,6 +357,15 @@ const createLocalEnvironment = async (stage: string): Promise<boolean> => {
     }
 
     if (await createLocalBuild()) {
+        // Run the environment variable preservation script to ensure critical variables are preserved
+        try {
+            console.log(blueBright("\nPreserving essential environment variables..."));
+            await executeCommand("node src/frontend/preserve-env-vars.js");
+            console.log(greenBright("\nEnvironment variables preserved successfully!"));
+        } catch (error) {
+            console.warn(redBright("\nWarning: Failed to preserve environment variables. You may need to run 'node src/frontend/preserve-env-vars.js' manually."));
+        }
+        
         console.log(greenBright(bold("\nCreated local environment!")));
         return true;
     } else {

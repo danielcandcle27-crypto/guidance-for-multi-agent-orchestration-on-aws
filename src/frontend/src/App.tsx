@@ -21,12 +21,24 @@ const apiConfig = {
     headers: async () => {
         try {
             const session = await fetchAuthSession();
-            return {
-                Authorization: session.tokens?.idToken?.toString() ?? "",
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'User-Agent': navigator.userAgent || 'AppSync-Client/1.0',
+                'Origin': window.location.origin
             };
+            
+            if (session.tokens?.idToken) {
+                headers['Authorization'] = session.tokens.idToken.toString();
+            }
+            
+            return headers;
         } catch (error) {
-            // Return empty headers for unauthenticated requests
-            return {};
+            // Return basic headers for unauthenticated requests
+            return {
+                'Content-Type': 'application/json',
+                'User-Agent': navigator.userAgent || 'AppSync-Client/1.0',
+                'Origin': window.location.origin
+            };
         }
     },
 };
@@ -41,9 +53,8 @@ console.log("Environment variables loaded:", {
     STORAGE_BUCKET_NAME: import.meta.env.VITE_STORAGE_BUCKET_NAME || "not set"
 });
 
-// Try to manually set the AppSync URL if it's missing or set to auto-discover
-// Hard-code the AppSync URL for testing - the URL was broken in the configuration
-const graphApiUrl = "https://YOUR-API-ID-HERE.appsync-api.YOUR-REGION-HERE.amazonaws.com/graphql";
+// Use the environment variable for the AppSync URL
+const graphApiUrl = import.meta.env.VITE_GRAPH_API_URL || "https://YOUR-API-ID-HERE.appsync-api.YOUR-REGION-HERE.amazonaws.com/graphql";
 
 // Force diag log mode
 const diagMode = true;
@@ -99,7 +110,11 @@ Amplify.configure(
         API: {
             GraphQL: {
                 endpoint: graphApiUrl,
-                defaultAuthMode: "iam", // Allow API calls with IAM roles for unauthenticated access
+                region: import.meta.env.VITE_REGION,
+                // API Key is needed for unauthenticated access to AppSync WebSockets
+                apiKey: import.meta.env.VITE_GRAPH_API_KEY || null,
+                // Use userPool auth as default but allow API key for WebSockets
+                defaultAuthMode: "userPool", // Use Cognito User Pool as default
             },
         },
         Storage: {

@@ -107,7 +107,7 @@ Because of restrictions of licensing on [Docker in Docker support](https://gitla
 
 ### AWS CLI
 
-Install `aws-cli` from [here](https://aws.amazon.com/cli/). After getting the credentials from `ada` above lets configure the region as `us-west-2`
+Install `aws-cli` from [here](https://aws.amazon.com/cli/). Now, we need to configure our credentials.
 
 ```bash
 aws configure
@@ -122,12 +122,7 @@ Default output format: json
 
 ## Repo Setup
 
-clone the repo from <https://gitlab.aws.dev/genai-labs/demo-assets/multiagent-collaboration>
-
-```bash
-git clone git@ssh.gitlab.aws.dev:genai-labs/demo-assets/mac-customer-support.git
-```
-
+Clone the repository. After, make sure that you are i root directory.
 
 ### Project Config
 
@@ -139,21 +134,11 @@ Edit the variables -
     "accounts": {
         "dev": {
             "number": "{ACCOUNT_NUMBER}",
-            "region": "us-west-2",
-            "midwaySecretId": "abc123"
-        },
-        "prod": {
-            "number": "{ACCOUNT_NUMBER}",
-            "region": "us-west-2",
-            "midwaySecretId": "abc123"
+            "region": "us-west-2"
         }
     }
 ```
 
-### Code defender
-
-[Code Defender](https://w.amazon.com/bin/view/AWS/Teams/GlobalServicesSecurity/Engineering/CodeDefender/UserHelp/#5) is a AWS Sales, Marketing, & Global Services (SMGS) security service that leadership has invested in and mandated to protect and safeguard our customers.
-This service validates Git activity and adds an additional layer of protection to users and our customers by ensuring users are not releasing AWS Secrets (Keys, Tokens, Account ARNs) or AWS and our customer's code to incorrect or publicly accessible repositories. Please take a look at our [wiki](https://w.amazon.com/bin/view/AWS/Teams/GlobalServicesSecurity/Engineering/CodeDefender/) if you'd like more details.
 
 ### Install dependencies
 
@@ -216,6 +201,8 @@ The local site is configured to run on port `3000`. So, ensure there are no othe
 Select the option ***7. Test Frontend Locally 💻***.
 
 Now, visit <http://localhost:3000> on a browser of choice (Chrome/Firefox are recommended)
+
+If you receive a blank screen, refresh the page.
 
 ---
 

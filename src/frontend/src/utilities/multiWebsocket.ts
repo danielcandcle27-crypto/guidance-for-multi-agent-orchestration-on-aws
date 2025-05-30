@@ -1,4 +1,5 @@
 // multiWebsocket.ts - Utility for managing multiple websocket connections and message handlers
+import { fetchAuthSession } from 'aws-amplify/auth';
 
 interface MessageHandler {
   type: string;
@@ -21,8 +22,14 @@ export const parseTraceData = (data: any): any => {
   if (!data) return null;
   
   try {
+    // Defensive check for null data.onUpdateChat
+    if (!data.onUpdateChat) {
+      console.debug('parseTraceData: data.onUpdateChat is null or undefined');
+      return null;
+    }
+    
     // First check for the new traceMetadata field which contains the full structure
-    if (data.onUpdateChat?.traceMetadata) {
+    if (data.onUpdateChat.traceMetadata) {
       const traceMetadata = data.onUpdateChat.traceMetadata;
       
       // Parse string traceMetadata to JSON if needed
@@ -121,11 +128,11 @@ const RETRY_DELAY = 1000; // 1 second initial retry delay
 const CONNECTION_TIMEOUT = 5000; // 5 second timeout
 
 // Connect to websocket with retry logic
-export const connectWebSocket = (
+export const connectWebSocket = async (
   sessionId: string, 
   modelId?: string,
   onConnect?: () => void
-): WebSocket | null => {
+): Promise<WebSocket | null> => {
   try {
     // Check if connection already exists
     const connId = generateConnectionId(sessionId, modelId);
@@ -151,22 +158,102 @@ export const connectWebSocket = (
     // Track this attempt
     connectionAttempts[connId] = (connectionAttempts[connId] || 0) + 1;
     
-    // Determine WS URL - for development, use a relative path that will proxy
-    // through the development server to avoid CORS issues
-    const wsUrl = process.env.NODE_ENV === 'development' 
-      ? `ws://${window.location.host}/api/ws/${sessionId}` 
-      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws/${sessionId}`;
+    // Determine WS URL with enhanced approach
+    // First try development proxy URL
+    let wsUrl = '';
     
-    console.log(`⚠️ DEBUG - WebSocket connection: ${wsUrl} (attempt ${connectionAttempts[connId]})`);
-    console.log(`⚠️ DEBUG - Session ID: ${sessionId}`);
-    console.log(`⚠️ DEBUG - Model ID: ${modelId || 'not provided'}`);
-    console.log(`⚠️ DEBUG - NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+    // If there's an explicit WebSocket endpoint defined in the environment, use that first
+    if (import.meta.env.VITE_WEBSOCKET_ENDPOINT) {
+      // Important: For AppSync, do NOT append sessionId to WebSocket URL
+      wsUrl = import.meta.env.VITE_WEBSOCKET_ENDPOINT;
+      console.log(`🌐 Using explicit WebSocket endpoint: ${wsUrl}`);
+    } 
+    // Otherwise use automatic URL construction
+    else if (process.env.NODE_ENV === 'development') {
+      // Development: proxy through the development server to avoid CORS
+      wsUrl = `ws://${window.location.host}/api/ws/${sessionId}`;
+      console.log(`🌐 Using development proxy WebSocket URL: ${wsUrl}`);
+    } else {
+      // Production: use protocol-relative URL based on current connection
+      wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws/${sessionId}`;
+      console.log(`🌐 Using production WebSocket URL: ${wsUrl}`);
+    }
     
-    // Create new connection
-    const ws = new WebSocket(wsUrl);
+    console.log(`⚠️ DEBUG - WebSocket connection attempt details:`);
+    console.log(`  URL: ${wsUrl}`);
+    console.log(`  Attempt: ${connectionAttempts[connId]}`);
+    console.log(`  Session ID: ${sessionId}`);
+    console.log(`  Model ID: ${modelId || 'not provided'}`);
+    console.log(`  NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+    
+    // Get authentication credentials for AppSync before creating WebSocket
+    let authenticatedWsUrl = wsUrl;
+    
+    try {
+      // Get the current authenticated session
+      const session = await fetchAuthSession();
+      
+      // Extract auth token if available (for Cognito User Pool authentication)
+      // Try both access token and ID token for compatibility
+      if (session && session.tokens) {
+        const idToken = session.tokens.idToken?.toString();
+        const accessToken = session.tokens.accessToken?.toString();
+        
+        // Use ID token first (recommended for AppSync), fallback to access token
+        const authToken = idToken || accessToken;
+        
+        if (authToken) {
+          console.log('✅ Authentication token obtained for WebSocket connection', {
+            tokenType: idToken ? 'ID Token' : 'Access Token',
+            tokenLength: authToken.length
+          });
+        
+          // Create authorization header object for AppSync
+          // Extract the actual GraphQL API hostname (not the realtime endpoint)
+          const graphApiUrl = import.meta.env.VITE_GRAPH_API_URL || wsUrl.replace('-realtime', '');
+          
+          // AppSync expects specific header format - use the full host including protocol
+          const authHeader = {
+            host: new URL(graphApiUrl).host, // Use host, not hostname (includes port if specified)
+            Authorization: authToken,  // No "Bearer" prefix needed for Cognito User Pool
+            'x-api-key': import.meta.env.VITE_GRAPH_API_KEY || '' // Include API key if available
+          };
+          
+          // Base64 encode the authorization header - with proper handling to avoid URL encoding issues
+          const authHeaderString = JSON.stringify(authHeader);
+          const encodedAuth = btoa(unescape(encodeURIComponent(authHeaderString))); // Handle UTF-8 characters properly
+          
+          // Add encoded auth as query parameter (AppSync standard approach)
+          authenticatedWsUrl = `${wsUrl}?header=${encodedAuth}`;
+          
+          // Debug logging (without exposing sensitive token)
+          console.log('🔐 WebSocket authentication details:', {
+            graphApiHost: new URL(graphApiUrl).hostname,
+            authHeaderStructure: {
+              host: authHeader.host,
+              hasAuthorization: !!authHeader.Authorization,
+              tokenLength: authToken.length
+            },
+            encodedAuthLength: encodedAuth.length
+          });
+        } else {
+          console.log('⚠️ No authentication tokens available in session');
+        }
+      } else {
+        console.log('⚠️ No authentication token available, proceeding with unauthenticated connection');
+      }
+    } catch (authError) {
+      console.warn('⚠️ Could not retrieve authentication token:', authError);
+    }
+    
+    // Create new connection with proper protocol for AppSync
+    const ws = new WebSocket(authenticatedWsUrl, ['graphql-ws']);
+    
+    // Log the protocol in use
+    console.log(`🌐 WebSocket connection using protocol: graphql-ws`);
     
     // Add connection timeout
-    const timeoutId = setTimeout(() => {
+    setTimeout(() => {
       if (ws.readyState === WebSocket.CONNECTING) {
         console.log(`Connection timed out for ${connId}`);
         ws.close();
@@ -174,12 +261,21 @@ export const connectWebSocket = (
     }, CONNECTION_TIMEOUT);
     
     // Set up listeners
-    ws.onopen = () => {
+    ws.onopen = async () => {
       console.log(`Websocket connection opened for ${connId}`);
-      if (onConnect) onConnect();
       
-      // Send a connection message
+      // Send AppSync GraphQL initialization message
       try {
+        // Send simplified connection_init message (auth already handled in URL)
+        const gqlInitMsg = {
+          type: 'connection_init'
+        };
+        
+        // Log the initialization message
+        console.log(`📤 SENDING GQL CONNECTION INIT on ${connId}`);
+        ws.send(JSON.stringify(gqlInitMsg));
+        
+        // Then send our application-specific connection message
         const connectMsg = {
           type: 'connect',
           sessionId,
@@ -195,8 +291,11 @@ export const connectWebSocket = (
         });
         
         ws.send(JSON.stringify(connectMsg));
+        
+        // Call the onConnect callback if provided
+        if (onConnect) onConnect();
       } catch (e) {
-        console.error('Error sending connect message:', e);
+        console.error('Error sending connection messages:', e);
       }
       
       // Wrap the original send method to add logging
@@ -233,15 +332,84 @@ export const connectWebSocket = (
       try {
         const data = JSON.parse(event.data);
         
+        // Handle AppSync specific connection messages
+        if (data.type === 'connection_ack') {
+          console.log(`🌟 AppSync connection acknowledged for ${connId}`);
+          // If needed, start the subscription here - using proper AppSync format
+          // Format the subscription based on AppSync real-time API requirements
+          // Make sure to include both the query and variables in the correct format
+          const startMsg = {
+            id: '1',
+            type: 'start',
+            payload: {
+              // Full GraphQL query including all field selections based on schema
+              query: `subscription OnUpdateChat($filter: ModelSubscriptionChatFilterInput) {
+                onUpdateChat(filter: $filter) {
+                  userId
+                  sessionId
+                  human
+                  assistant
+                  trace
+                  traceMetadata
+                  expiration
+                }
+              }`,
+              variables: {
+                filter: {
+                  sessionId: {
+                    eq: sessionId
+                  }
+                }
+              },
+              // Include extensions for AppSync
+              extensions: {
+                authorization: {
+                  host: new URL(import.meta.env.VITE_GRAPH_API_URL || '').host,
+                  Authorization: 'Bearer ${token}' // Placeholder will be replaced by AppSync using the header
+                }
+              }
+            }
+          };
+          ws.send(JSON.stringify(startMsg));
+          console.log(`📩 Sent subscription start message for ${connId}`);
+          
+          // Continue with regular message processing
+        } else if (data.type === 'connection_error') {
+          console.error(`❌ AppSync connection error for ${connId}:`, data.payload || 'No error details provided');
+          
+          // Log specific error details for debugging
+          if (data.payload) {
+            console.error('🔍 Error details:', {
+              message: data.payload.message || 'No message',
+              errorType: data.payload.errorType || 'Unknown error type',
+              errors: data.payload.errors || []
+            });
+            
+            // Check for specific authentication errors
+            if (data.payload.message && data.payload.message.includes('Required headers are missing')) {
+              console.error('💡 Authentication header issue detected. Check:');
+              console.error('   - Cognito User Pool token is valid');
+              console.error('   - Host header matches GraphQL API endpoint');
+              console.error('   - Base64 encoding is correct');
+            }
+          }
+          
+          // Don't proceed with further processing in case of connection error
+          return;
+        } else if (data.type === 'ka') {
+          // Keep-alive message, just acknowledge silently
+          console.debug(`💌 Received keep-alive for ${connId}`);
+        }
+        
         // Log raw data with special prefix for easy filtering
         console.log("%cRAW DATA: AppSync/GraphQL Response", "background: #333; color: #bada55; padding: 2px;", data);
         
-        // Enhanced logging for received messages
+        // Enhanced logging for received messages with defensive null checks
         console.log(`📥 MESSAGE RECEIVED on ${connId}:`, {
-          type: data.type || 'unknown',
-          hasTrace: !!data.onUpdateChat?.trace,
-          hasTraceMetadata: !!data.onUpdateChat?.traceMetadata,
-          hasAssistantResponse: !!data.onUpdateChat?.assistant,
+          type: data?.type || 'unknown',
+          hasTrace: Boolean(data?.onUpdateChat?.trace),
+          hasTraceMetadata: Boolean(data?.onUpdateChat?.traceMetadata),
+          hasAssistantResponse: Boolean(data?.onUpdateChat?.assistant),
           timestamp: new Date().toISOString()
         });
         
@@ -286,17 +454,22 @@ export const connectWebSocket = (
                 const traceSource = data.onUpdateChat?.traceMetadata ? 'traceMetadata' : 'trace';
                 const traceData = data.onUpdateChat[traceSource];
                 
-                // Log trace data when handling it
-                console.log(`🔍 TRACE DATA on ${connId} (source: ${traceSource}):`, {
-                  collaborator: typeof traceData === 'object' ? 
-                    traceData.collaboratorName || 'Unknown' : 'String trace',
-                  agentName: typeof traceData === 'object' ? 
-                    traceData.agentName || 'Unknown' : 'N/A',
-                  traceType: typeof traceData === 'string' ? 'string' : 'object',
-                  length: typeof traceData === 'string' ? 
-                    traceData.length : 
-                    JSON.stringify(traceData).length
-                });
+            // Check if traceData exists before logging or accessing its properties
+            if (traceData) {
+              // Log trace data when handling it
+              console.log(`🔍 TRACE DATA on ${connId} (source: ${traceSource}):`, {
+                collaborator: typeof traceData === 'object' ? 
+                  (traceData.collaboratorName || 'Unknown') : 'String trace',
+                agentName: typeof traceData === 'object' ? 
+                  (traceData.agentName || 'Unknown') : 'N/A',
+                traceType: typeof traceData === 'string' ? 'string' : 'object',
+                length: typeof traceData === 'string' ? 
+                  traceData.length : 
+                  JSON.stringify(traceData || {}).length
+              });
+            } else {
+              console.warn(`⚠️ Empty trace data received from ${traceSource}`);
+            }
                 
                 handler.handler(data);
               }
@@ -373,6 +546,56 @@ export const isWebSocketConnected = (): boolean => {
   return Object.values(connections).some(ws => ws.readyState === WebSocket.OPEN);
 };
 
+// Debug helper function to diagnose connection issues
+export const debugWebSocketConnection = async (sessionId: string): Promise<void> => {
+  console.log('🔍 DEBUGGING WEBSOCKET CONNECTION');
+  
+  try {
+    // Check environment variables
+    console.log('Environment variables check:');
+    console.log('- WEBSOCKET_ENDPOINT:', import.meta.env.VITE_WEBSOCKET_ENDPOINT ? '✅ Set' : '❌ Missing');
+    console.log('- GRAPH_API_URL:', import.meta.env.VITE_GRAPH_API_URL ? '✅ Set' : '❌ Missing');
+    console.log('- GRAPH_API_KEY:', import.meta.env.VITE_GRAPH_API_KEY ? '✅ Set' : '❌ Missing');
+    console.log('- USER_POOL_ID:', import.meta.env.VITE_USER_POOL_ID ? '✅ Set' : '❌ Missing');
+    
+    // Check auth session
+    try {
+      const session = await fetchAuthSession();
+      console.log('Auth session check:');
+      console.log('- Session object:', session ? '✅ Available' : '❌ Missing');
+      console.log('- ID Token:', session.tokens?.idToken ? '✅ Available' : '❌ Missing');
+      console.log('- Access Token:', session.tokens?.accessToken ? '✅ Available' : '❌ Missing');
+    } catch (error) {
+      console.log('❌ Failed to get auth session:', error);
+    }
+    
+    // Analyze URLs
+    if (import.meta.env.VITE_GRAPH_API_URL && import.meta.env.VITE_WEBSOCKET_ENDPOINT) {
+      const graphApiUrl = import.meta.env.VITE_GRAPH_API_URL;
+      const wsUrl = import.meta.env.VITE_WEBSOCKET_ENDPOINT;
+      
+      console.log('URL consistency check:');
+      const graphApiId = graphApiUrl.match(/https:\/\/([^.]+)/)?.[1];
+      const wsApiId = wsUrl.match(/wss:\/\/([^.]+)/)?.[1];
+      
+      if (graphApiId && wsApiId) {
+        console.log('- API IDs match:', graphApiId === wsApiId ? '✅ Yes' : '❌ No');
+        if (graphApiId !== wsApiId) {
+          console.log(`  GraphQL API ID: ${graphApiId}`);
+          console.log(`  WebSocket API ID: ${wsApiId}`);
+        }
+      }
+      
+      console.log('- GraphQL URL is for AppSync:', graphApiUrl.includes('appsync-api') ? '✅ Yes' : '❌ No');
+      console.log('- WebSocket URL is for AppSync Realtime:', wsUrl.includes('appsync-realtime') ? '✅ Yes' : '❌ No');
+    }
+    
+    console.log('🔍 DEBUG COMPLETE - Check the log for issues');
+  } catch (error) {
+    console.error('Error in debug function:', error);
+  }
+};
+
 // Export default for compatibility
 export default {
   connectWebSocket,
@@ -380,5 +603,6 @@ export default {
   unregisterMessageHandler,
   generateConnectionId,
   isWebSocketConnected,
-  parseTraceData
+  parseTraceData,
+  debugWebSocketConnection
 };
