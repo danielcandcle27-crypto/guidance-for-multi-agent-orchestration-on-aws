@@ -1,4 +1,25 @@
-**/.claude/settings.local.json
+# Node modules
 node_modules
-cdk.out/
+
+# TypeScript build artifacts
+**/*.js
+**/*.d.ts
+# Allow TS files
+!**/*.ts
+# Allow certain JS files that should be committed
+!jest.config.js
+!src/frontend/eslint.config.js
+!src/frontend/diagnostic.js
+!src/frontend/preserve-env-vars.js
+!src/frontend/src/utilities/completeFix.js
+!src/frontend/src/utilities/messageCompletionTest.js
+
+# Keep configuration files
+!commitlint.config.ts
+!eslint.config.ts
+!config/project-config.json
+!**/tsconfig*.json
+
+# Build directories
 dist/
+cdk.out/

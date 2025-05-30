@@ -1,0 +1,144 @@
+/**
+ * Chat Bubble CSS Fixes
+ * 
+ * These styles address issues with message content being visually truncated
+ * in the chat UI. They ensure proper expansion of containers for long product
+ * recommendations and other responses.
+ */
+
+/* Ensure chat bubbles can expand to show full content */
+.cloudscape-chat-bubble-content {
+  max-height: none !important; /* Override any max-height limits */
+  overflow: visible !important; /* Allow content to be fully visible */
+  white-space: pre-wrap !important; /* Ensure proper wrapping of content */
+  word-break: break-word !important; /* Break words at end of line if needed */
+  overflow-wrap: break-word !important; /* Modern alternative to word-wrap */
+}
+
+/* Fix for markdown/content containers inside chat bubbles */
+.cloudscape-chat-bubble-content .markdown-response,
+.cloudscape-chat-bubble-content .formatted-response,
+.cloudscape-chat-bubble-content > div {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+}
+
+/* Improved bullet point and list formatting */
+.cloudscape-chat-bubble-content ul,
+.cloudscape-chat-bubble-content ol {
+  padding-left: 16px !important; /* Reduced indentation to bring bullets closer to left edge */
+  margin-top: 8px !important;
+  margin-bottom: 12px !important;
+  width: auto !important;
+  max-width: calc(100% - 16px) !important; /* Ensure lists don't overflow their container */
+}
+
+/* Fix individual list items with better spacing and alignment */
+.cloudscape-chat-bubble-content li {
+  margin-bottom: 8px !important; /* Increased spacing between items */
+  display: list-item !important; /* Ensure proper list item display */
+  margin-left: 0 !important; /* Ensure no extra leftward shift */
+  padding-left: 4px !important; /* Small padding after bullet */
+  text-align: left !important; /* Force left alignment */
+  line-height: 1.5 !important; /* Better line height for readability */
+  position: relative !important; /* Required for proper bullet rendering */
+}
+
+/* Ensure list item text wrapping properly */
+.cloudscape-chat-bubble-content li p {
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  width: 100% !important;
+}
+
+/* Fix for nested lists */
+.cloudscape-chat-bubble-content ul ul,
+.cloudscape-chat-bubble-content ol ol,
+.cloudscape-chat-bubble-content ul ol,
+.cloudscape-chat-bubble-content ol ul {
+  margin-top: 8px !important;
+  margin-bottom: 0 !important;
+}
+
+/* Fix for sections with product recommendations */
+.cloudscape-chat-bubble-content h3,
+.cloudscape-chat-bubble-content h2,
+.cloudscape-chat-bubble-content strong {
+  display: block !important; /* Ensure headers are block elements */
+  margin-top: 16px !important;
+  margin-bottom: 8px !important;
+  word-break: break-word !important;
+}
+
+/* Fix for the chat bubble container itself */
+.cloudscape-chat-bubble {
+  max-width: 95% !important; /* Allow bubbles to use most of the available width */
+}
+
+/* Fix for scrollable container to show all content */
+.cloudscape-chat-scrollable-container {
+  overflow-y: auto !important;
+  max-height: none !important; /* Don't limit height artificially */
+}
+
+/* Fix for any message content containers */
+.markdown-content, 
+.processed-message, 
+.plain-text-message, 
+.fallback-content {
+  overflow: visible !important;
+  max-height: none !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+/* Emergency fix for any container that might be limiting height */
+[class*="chat"] [class*="content"],
+[class*="chat"] [class*="message"] {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Special fixes for product listings and recommendations */
+.cloudscape-chat-bubble-content p:has(+ ul),
+.cloudscape-chat-bubble-content h3:has(+ ul) {
+  margin-bottom: 4px !important;
+}
+
+/* Fix Apple product listings specifically */
+.cloudscape-chat-bubble-content p:contains("Apple Watch"),
+.cloudscape-chat-bubble-content p:contains("Product ID:"),
+.cloudscape-chat-bubble-content p:contains("Price:") {
+  margin-bottom: 8px !important;
+  padding-bottom: 4px !important;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+/* Ensure product listings are displayed in full */
+.cloudscape-chat-bubble-content p:contains("Price:"),
+.cloudscape-chat-bubble-content p:contains("Rating:") {
+  display: block !important;
+  width: 100% !important;
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+/* Fix for mobile view */
+@media (max-width: 768px) {
+  .cloudscape-chat-bubble {
+    max-width: 95% !important;
+  }
+}
+
+/* Global emergency fix to prevent any truncated content */
+.cloudscape-chat-bubble-content * {
+  overflow: visible !important;
+  max-height: none !important;
+  text-overflow: clip !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
