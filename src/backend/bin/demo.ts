@@ -15,6 +15,7 @@ const properties = {
         account: account.number,
         region: account.region,
     },
+    description : "Guidance for Multi-agent Orchestration (SO9035)"
 };
 
 if (projectConfig.codePipeline && stage === PresetStageType.Dev) {
