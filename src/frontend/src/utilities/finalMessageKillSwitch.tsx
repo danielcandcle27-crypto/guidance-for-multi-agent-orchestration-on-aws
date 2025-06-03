@@ -12,6 +12,7 @@ import {
   setupGlobalKillSwitch, 
   setAnimationProtection, 
   isAnimationProtected,
+  isProcessingComplete,
   resetChatSession
 } from './killSwitch';
 
@@ -70,11 +71,84 @@ export const FinalMessageKillSwitchListener: React.FC = () => {
       // This is just for logging/debug purposes
     };
     
+    // Handler for verification events - critical to recover from stuck messages
+    const handleVerifyFinalMessageProcessing = (e: Event) => {
+      const event = e as CustomEvent;
+      const timestamp = event.detail?.timestamp || Date.now();
+      const content = event.detail?.content;
+      const messageId = event.detail?.messageId;
+      
+      console.log(`💡 Message verification requested: ${messageId}, len=${content?.length || 0}`);
+      
+      // Check if this message has been properly processed
+      const isMessageComplete = isProcessingComplete();
+      
+      if (!isMessageComplete && content) {
+        // Message is stuck - force complete it
+        console.log(`🚨 Message ${messageId} appears to be stuck - forcing completion`);
+        
+        // Force completion via both event mechanisms
+        document.dispatchEvent(new Event('forceCompleteTextContent'));
+        
+        // Additionally trigger direct rendering
+        dispatchFinalMessageRendered(content);
+      }
+    };
+    
     const handleFinalMessageRendered = () => {
       console.log('Final message rendered event captured by kill switch listener - activating complete kill switch');
       
       // Phase 2 is also handled in killSwitch.ts
       // This is just for logging/debug purposes
+    };
+    
+    // Handler for Supervisor final responses - ensure they're properly processed
+    const handleSupervisorFinalResponse = (e: Event) => {
+      const event = e as CustomEvent;
+      const content = event.detail?.content;
+      const detectionTime = event.detail?.detectionTime || Date.now();
+      const receivedTime = Date.now();
+      
+      if (content && typeof content === 'string') {
+        console.log(`⏱️ [${receivedTime}] TIMING: Kill switch received supervisorFinalResponse event (delay from detection: ${receivedTime - detectionTime}ms)`);
+        
+        // First ensure we stop all animations in progress
+        document.dispatchEvent(new Event('stopAllTextAnimations'));
+        
+        // Dispatch final message detected event (Phase 1)
+        dispatchFinalMessageDetected(content);
+        
+        // Immediately dispatch final message rendered (Phase 2) with zero delay for maximum speed
+        // Use Promise.resolve().then() for microtask queue - even faster than setTimeout(0)
+        Promise.resolve().then(() => {
+          const renderTime = Date.now();
+          console.log(`⏱️ [${renderTime}] TIMING: Kill switch dispatching finalMessageRendered event (delay from received: ${renderTime - receivedTime}ms, total: ${renderTime - detectionTime}ms)`);
+          dispatchFinalMessageRendered(content);
+        });
+      }
+    };
+    
+    // Add handler for non-Supervisor agent final responses
+    const handleAgentFinalResponse = (e: Event) => {
+      const event = e as CustomEvent;
+      const content = event.detail?.content;
+      const agentName = event.detail?.agentName || 'Unknown';
+      const detectionTime = event.detail?.detectionTime || Date.now();
+      const receivedTime = Date.now();
+      
+      if (content && typeof content === 'string') {
+        console.log(`⏱️ [${receivedTime}] TIMING: Kill switch received ${agentName} final response event (delay from detection: ${receivedTime - detectionTime}ms)`);
+        
+        // Dispatch final message detected event (Phase 1)
+        dispatchFinalMessageDetected(content);
+        
+        // Immediately dispatch final message rendered (Phase 2) with zero delay
+        setTimeout(() => {
+          const renderTime = Date.now();
+          console.log(`⏱️ [${renderTime}] TIMING: Kill switch dispatching finalMessageRendered for ${agentName} (delay from received: ${renderTime - receivedTime}ms, total: ${renderTime - detectionTime}ms)`);
+          dispatchFinalMessageRendered(content);
+        }, 0); // Reduced to 0ms for maximum speed - consistent with supervisor handler
+      }
     };
     
     // Handler for session reset events - mark the time to prevent race conditions
@@ -92,12 +166,20 @@ export const FinalMessageKillSwitchListener: React.FC = () => {
     
     document.addEventListener('finalMessageDetected', handleFinalMessageDetected);
     document.addEventListener('finalMessageRendered', handleFinalMessageRendered);
+    document.addEventListener('supervisorFinalResponse', handleSupervisorFinalResponse);
+    document.addEventListener('supervisorFinalResponseRendered', handleSupervisorFinalResponse);
+    document.addEventListener('agentFinalResponseRendered', handleAgentFinalResponse); // New event for non-Supervisor agents
     document.addEventListener('chatSessionReset', handleChatSessionReset);
+    document.addEventListener('verifyFinalMessageProcessing', handleVerifyFinalMessageProcessing);
     
     return () => {
       document.removeEventListener('finalMessageDetected', handleFinalMessageDetected);
       document.removeEventListener('finalMessageRendered', handleFinalMessageRendered);
+      document.removeEventListener('supervisorFinalResponse', handleSupervisorFinalResponse);
+      document.removeEventListener('supervisorFinalResponseRendered', handleSupervisorFinalResponse);
+      document.removeEventListener('agentFinalResponseRendered', handleAgentFinalResponse); // Clean up listener
       document.removeEventListener('chatSessionReset', handleChatSessionReset);
+      document.removeEventListener('verifyFinalMessageProcessing', handleVerifyFinalMessageProcessing);
     };
   }, []);
   
@@ -112,13 +194,24 @@ export const FinalMessageKillSwitchListener: React.FC = () => {
 export function isFinalMessage(traceData?: any, content?: string): boolean {
   // Method 1: Check explicit completion flags in trace data (most reliable)
   if (traceData) {
+    // Check for Supervisor final response flag
+    if (traceData.isSupervisorFinalResponse === true) {
+      console.log('Detected Supervisor final response flag in trace data');
+      return true;
+    }
+    
+    // Check other completion flags
     if (
       traceData.responseComplete === true ||
       traceData.content?.responseComplete === true ||
       traceData.onUpdateChat?.responseComplete === true ||
       // Check for final response in orchestration trace
       traceData.content?.trace?.orchestrationTrace?.observation?.finalResponse ||
-      traceData.trace?.orchestrationTrace?.observation?.finalResponse
+      traceData.trace?.orchestrationTrace?.observation?.finalResponse ||
+      // Check if this is a trace with originalAgentType of Supervisor and "Final Response" in title or text
+      (traceData.originalAgentType === 'Supervisor' && 
+        ((traceData.tasks && traceData.tasks.some((t: any) => t.title === 'Final Response')) ||
+         (traceData.text && typeof traceData.text === 'string' && traceData.text.includes('Final Response'))))
     ) {
       return true;
     }

@@ -245,13 +245,25 @@ export const resetProcessingState = (): void => {
  * 2. Resets the processing state
  * 3. Clears all active timers and intervals
  * 4. Unfreezes flow animations
- * 5. Clears localStorage message caches
+ * 5. Cleans up localStorage message caches
  * 6. Dispatches a centralized reset event
  */
 export const resetChatSession = (): void => {
   if (typeof window === 'undefined') return;
 
   console.log('🔄 Resetting chat session state for new message');
+  
+  // Import the cleanup function dynamically to avoid circular dependencies
+  // This is needed because finalMessageStreaming imports from killSwitch
+  try {
+    const { cleanupLocalStorageMessages } = require('./finalMessageStreaming');
+    if (cleanupLocalStorageMessages && typeof cleanupLocalStorageMessages === 'function') {
+      console.log('🧹 Running localStorage cleanup as part of session reset');
+      cleanupLocalStorageMessages();
+    }
+  } catch (e) {
+    console.error('Failed to clean up localStorage during session reset:', e);
+  }
   
   // 0. First backup any important messages before clearing
   // This creates a timestamped backup of all messages for potential recovery

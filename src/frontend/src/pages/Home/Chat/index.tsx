@@ -14,8 +14,8 @@ import { v4 as uuidv4 } from "uuid";
 import { FlashbarContext } from "../../../common/contexts/Flashbar";
 import { onUpdateChat } from "../../../common/graphql/subscriptions";
 import { sendMessage } from "./api";
-import QuickLinks from "./QuickLinks";
 import { AgentFlowPanel } from '../../../common/components/react_flow/AgentFlowPanel';
+import SampleQuestions from "./SampleQuestions";
 import { parseTraceData, registerMessageHandler, unregisterMessageHandler, generateConnectionId } from '../../../utilities/multiWebsocket';
 import { handleTraceMessage, parseTraceJson, TraceGroup as TraceGroupType, TraceState } from '../../../utilities/traceParser';
 import TraceGroup from '../../../common/components/react_flow/TraceGroup';
@@ -738,8 +738,8 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
                                                         )
                                                     );
                                                     
-                                                    // Explicitly end loading state
-                                                    updateLoadingState(false);
+                                                    // Explicitly end loading state - ensure Data tab is enabled
+                                                    updateLoadingState(false); // This properly updates both local state and parent component
                                                     setCurrentResponseId(null);
                                                     
                                                     return; // Skip the delayed update below
@@ -1111,17 +1111,21 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
             if (newPairs.length > 0) {
                 console.log(`Found ${newPairs.length} new message pairs to add to history`);
                 
-                // Combine existing pairs with new ones
-                const combinedPairs = [...messagePairs, ...newPairs];
-                
-                // Keep only the most recent 10 pairs
-                const latestPairs = combinedPairs.slice(-10);
-                
-                console.log(`Updating message history: now ${latestPairs.length} pairs total`);
-                setMessagePairs(latestPairs);
-                
-                // Immediately save to localStorage
-                localStorage.setItem('chatHistory', JSON.stringify(latestPairs));
+                // Use the saveMessagePair function from chatHistoryService.ts for each new pair
+                // to ensure consistent history management
+                import('./chatHistoryService').then(({ saveMessagePair }) => {
+                    // Process each pair one by one to ensure consistent saving
+                    newPairs.forEach(pair => {
+                        saveMessagePair(pair);
+                    });
+                    
+                    // Then reload the history from localStorage to ensure we're showing the latest data
+                    import('./loadChatHistory').then(({ loadChatHistoryFromLocalStorage }) => {
+                        const latestHistory = loadChatHistoryFromLocalStorage();
+                        console.log(`Updated message history: now ${latestHistory.length} pairs total`);
+                        setMessagePairs(latestHistory);
+                    });
+                });
             }
         }
     }, [messages, messagePairs]);
@@ -1129,6 +1133,15 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
     // Handle message submission
     const submitMessageForm = async () => {
         if (!message.trim()) return;
+
+    // First, clean up localStorage to prevent quota exceeded errors
+    try {
+        const { triggerMessageCleanup } = await import('../../../utilities/localStorageCleanup');
+        triggerMessageCleanup(); // This will clean up localStorage before sending new messages
+        console.log('🧹 Triggered localStorage cleanup before sending new message');
+    } catch (error) {
+        console.error('Failed to clean up localStorage:', error);
+    }
 
     // Generate a new session ID for each request to prevent backend session confusion
     const newSessionId = uuidv4();
@@ -1139,6 +1152,25 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
     
     // Reset all flow animations for the new message
     resetFlowAnimations();
+    
+    // Explicitly set animations state back to unfrozen for new message
+    setAnimationsFrozen(false);
+    setFlowAnimationsFrozen(false);
+    
+    // Force reset all DOM animation classes
+    const activeEdges = document.querySelectorAll('.react-flow__edge-path.active, .react-flow__edge-path.solid-blue');
+    activeEdges.forEach((edge) => {
+      edge.classList.remove('active', 'solid-blue');
+    });
+    
+    // Dispatch a custom event to ensure complete animation reset
+    const flowResetEvent = new CustomEvent('flowAnimationReset', {
+      detail: { 
+        timestamp: Date.now(),
+        resetCompletedStates: true
+      }
+    });
+    document.dispatchEvent(flowResetEvent);
         
     // ALWAYS force remove ALL previous messages except the initial greeting
     // This ensures a clean slate for the new conversation
@@ -1198,7 +1230,21 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
             window.__activeTimers.push(responseTimeout);
         }
 
-        // The assistant message will be added after receiving the first trace data
+        // Add empty assistant message to ensure the loader is shown
+        setMessages((prev) => [
+            ...prev,
+            {
+                id: responseId,
+                type: "assistant",
+                content: "", // Empty content initially
+                timestamp: new Date().toLocaleTimeString(),
+            }
+        ]);
+
+        // Explicitly dispatch event to reactivate animations
+        document.dispatchEvent(new CustomEvent('reactivateAnimations', {
+            detail: { timestamp: Date.now() }
+        }));
 
         // Create a unique user message trace ID linked to the current message ID
         const userMessageTraceId = `browser-trace-user-${userMessage.id}`;
@@ -1233,6 +1279,40 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
             }
         });
         document.dispatchEvent(browserNodeUpdateEvent);
+        
+        // Ensure the user message is sent after a slight delay to properly initialize animations
+        setTimeout(() => {
+            // Dispatch a custom event to notify that a user message was sent
+            document.dispatchEvent(new CustomEvent('userMessageSent', {
+                detail: { 
+                    message: messageToSend,
+                    timestamp: Date.now()
+                }
+            }));
+            
+            // Store the current session ID for cleanup functionality
+            window.__currentSessionId = newSessionId;
+            
+            // Run storage cleanup to prevent quota issues
+            import('./chatHistoryService').then(({ cleanupChatStorage }) => {
+                setTimeout(() => cleanupChatStorage(false), 500);
+            });
+            
+            // Also clean up agent trace storage
+            if (window.__agentTraceCache) {
+                setTimeout(() => {
+                    try {
+                        import('../../../utilities/agentTraceStorage').then(({ cleanupAllButCurrentSession }) => {
+                            if (typeof cleanupAllButCurrentSession === 'function') {
+                                cleanupAllButCurrentSession();
+                            }
+                        });
+                    } catch (error) {
+                        console.error("Error importing cleanupAllButCurrentSession:", error);
+                    }
+                }, 1000);
+            }
+        }, 10);
 
         // Send message to backend
         try {
@@ -1425,49 +1505,93 @@ const resetEdgeAnimations = (): void => {
 
 // Handle input focus using React's approach rather than direct DOM events
 const handleInputFocus = () => {
-    // Use our comprehensive reset function to clear state
-    resetChatSession();
-    
-    // Also remove ALL previous messages except the initial greeting when input gets focus
-    // This ensures a clean slate when user focuses the input field
-    console.log("Removing ALL previous messages on input focus");
-    setMessages(prev => prev.filter(msg => 
-        msg.id === "1" && msg.type === "assistant" // Keep ONLY the initial greeting
-    ));
-
-    // Reset the React workflow diagram
+    // Reset animations and processing state only, but keep messages intact
     resetFlowAnimations();
     
-    // Clear all stored agent traces
-    clearAllAgentTraces();
+    // Stop any text animations that might be in progress
+    stopAllTextAnimations();
     
-    console.log("Reset complete - ready for new conversation");
+    console.log("Reset animations and processing state, messages preserved");
 };
     
-    // State for active tab
+    // State for active tab and history loading
     const [activeTab, setActiveTab] = useState<'chat' | 'history'>('chat');
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState<string | null>(null);
     
-    // Effect to save message history to local storage
+    // Load chat history from DynamoDB on mount or when activeTab changes to 'history'
     useEffect(() => {
-        if (messagePairs.length > 0) {
-            localStorage.setItem('chatHistory', JSON.stringify(messagePairs.slice(-10)));
-        }
-    }, [messagePairs]);
-    
-    // Load history from local storage on mount
-    useEffect(() => {
-        const savedHistory = localStorage.getItem('chatHistory');
-        if (savedHistory) {
+        const fetchChatHistory = async () => {
+            // Always fetch chat history on component mount for console display
+            setHistoryLoading(true);
+            setHistoryError(null);
+            
             try {
-                const parsedHistory = JSON.parse(savedHistory);
-                if (Array.isArray(parsedHistory) && parsedHistory.length > 0) {
-                    setMessagePairs(parsedHistory);
+                // Use our enhanced chat history loader that logs to console
+                const { loadAndLogChatHistory } = await import('./loadChatHistory');
+                const historyData = await loadAndLogChatHistory();
+                
+                // Only update UI if we're on the history tab
+                if (activeTab === 'history') {
+                    setMessagePairs(historyData);
                 }
-            } catch (e) {
-                console.error('Error parsing chat history from localStorage:', e);
+            } catch (error) {
+                console.error('Error loading chat history from DynamoDB:', error);
+                setHistoryError(error instanceof Error ? error.message : 'Failed to load chat history');
+                
+                // Try to fall back to localStorage if DynamoDB fetch fails
+                const { loadChatHistoryFromLocalStorage } = await import('./loadChatHistory');
+                const localStorageHistory = loadChatHistoryFromLocalStorage();
+                
+                // Only update UI if we're on the history tab
+                if (activeTab === 'history' && localStorageHistory.length > 0) {
+                    setMessagePairs(localStorageHistory);
+                }
+            } finally {
+                setHistoryLoading(false);
+            }
+        };
+        
+        fetchChatHistory();
+    }, [activeTab]);
+    
+    // Function to refresh chat history
+    const refreshChatHistory = async () => {
+        if (activeTab === 'history') {
+            setHistoryLoading(true);
+            setHistoryError(null);
+            
+            try {
+                // Use our enhanced chat history loader for refreshing too
+                const { loadAndLogChatHistory } = await import('./loadChatHistory');
+                const historyData = await loadAndLogChatHistory();
+                setMessagePairs(historyData);
+            } catch (error) {
+                console.error('Error refreshing chat history:', error);
+                setHistoryError(error instanceof Error ? error.message : 'Failed to refresh chat history');
+                
+                // Try fallback to localStorage here too
+                const { loadChatHistoryFromLocalStorage } = await import('./loadChatHistory');
+                const localStorageHistory = loadChatHistoryFromLocalStorage();
+                if (localStorageHistory.length > 0) {
+                    setMessagePairs(localStorageHistory);
+                }
+            } finally {
+                setHistoryLoading(false);
             }
         }
-    }, []);
+    };
+    
+    // Use the chat history service to manage the history
+    useEffect(() => {
+        // Load chat history on component mount
+        import('./loadChatHistory').then(({ loadChatHistoryFromLocalStorage }) => {
+            const history = loadChatHistoryFromLocalStorage();
+            if (history && history.length > 0) {
+                setMessagePairs(history);
+            }
+        });
+    }, []); // Empty dependency array means this runs once on component mount
     
     // Setup emergency message recovery (without session timeout manager)
     useEffect(() => {
@@ -1515,12 +1639,18 @@ const handleInputFocus = () => {
     }, [messages, addFlashbarItem]);
 
     return (
-        <Grid
-            gridDefinition={[
-                { colspan: { default: 12, xxs: showWorkflow ? 7 : 12 } },
-                { colspan: { default: 12, xxs: showWorkflow ? 5 : 0 } }
-            ]}
-        >
+        <>
+            {/* Sample Questions Section - spans full width */}
+            <Box margin={{ bottom: "l" }} padding={{ horizontal: "s" }}>
+                <SampleQuestions onQuestionClick={handleQuickLinkClick} />
+            </Box>
+
+            <Grid
+                gridDefinition={[
+                    { colspan: { default: 12, xxs: showWorkflow ? 7 : 12 } },
+                    { colspan: { default: 12, xxs: showWorkflow ? 5 : 0 } }
+                ]}
+            >
             {/* Chat Panel - Left Side */}
 
             <Box padding="s">
@@ -1601,7 +1731,6 @@ const handleInputFocus = () => {
                     disableContentPaddings
                     footer={
                         <SpaceBetween size="s">
-                            <QuickLinks onLinkClick={handleQuickLinkClick} />
                             <PromptInput
                                 ref={promptInputRef}
                                 disabled={isLoading}
@@ -1635,7 +1764,7 @@ const handleInputFocus = () => {
                         </SpaceBetween>
                     }
                 >
-                    <div style={{ height: "calc(100vh - 280px)" }}>
+                    <div style={{ height: "calc(100vh - 390px)" }}>
                         {activeTab === 'chat' ? (
                             <MemoizedScrollableContainer ref={messagesContainerRef}>
                                 <SpaceBetween size="l">
@@ -1670,21 +1799,39 @@ const handleInputFocus = () => {
                                                         .filter((msg): msg is TraceGroupType => isTraceGroup(msg))  // Use our type guard with proper type assertion
                                                         .sort((a, b) => {
                                                             const getAgentType = (msg: TraceGroupType) => {
-                                                                // First check originalAgentType which is more reliable
-                                                                if (msg.originalAgentType === 'ROUTING_CLASSIFIER') {
+                                                                // First check for routing classifier by different methods - highest priority
+                                                                if (msg.originalAgentType === 'ROUTING_CLASSIFIER' || 
+                                                                    (msg.agentName === 'ROUTING_CLASSIFIER') ||
+                                                                    (msg._debug?.detectedType === 'ROUTING_CLASSIFIER')) {
                                                                     return 'ROUTING_CLASSIFIER';
-                                                                } else if (msg.originalAgentType === 'Supervisor') {
+                                                                }
+                                                                
+                                                                // Then check for Supervisor - second priority
+                                                                if (msg.originalAgentType === 'Supervisor' || 
+                                                                    (msg.agentName === 'Supervisor') || 
+                                                                    (msg.collaborationConfig?.supervisorWithRouting) || 
+                                                                    (msg._debug?.detectedType === 'Supervisor')) {
                                                                     return 'Supervisor';
-                                                                } else if (msg.originalAgentType === 'Unknown') {
-                                                                    // Try to treat Unknown as Supervisor if possible
+                                                                }
+
+                                                                // Unknown should be treated as Supervisor
+                                                                if (msg.originalAgentType === 'Unknown') {
                                                                     return 'Supervisor';
                                                                 }
 
                                                                 // Then check the dropdown title
                                                                 const titleParts = msg.dropdownTitle.split(' ');
-                                                                if (titleParts[0] === 'ROUTING_CLASSIFIER') {
+                                                                if (titleParts[0] === 'ROUTING_CLASSIFIER' || 
+                                                                    titleParts[0].toLowerCase().includes('routing')) {
                                                                     return 'ROUTING_CLASSIFIER';
-                                                                } else if (titleParts[0] === 'Unknown') {
+                                                                }
+                                                                
+                                                                if (titleParts[0] === 'Supervisor' || 
+                                                                    titleParts[0].toLowerCase().includes('supervisor')) {
+                                                                    return 'Supervisor';
+                                                                }
+                                                                
+                                                                if (titleParts[0] === 'Unknown') {
                                                                     // Put Unknown agent under Supervisor category
                                                                     return 'Supervisor';
                                                                 }
@@ -1696,10 +1843,10 @@ const handleInputFocus = () => {
                                                             const aType = getAgentType(a);
                                                             const bType = getAgentType(b);
 
-                                                            // Define the desired order for the main agent types
+                                                            // Define the strict order for trace groups - ensuring supervisor is first, routing classifier second
                                                             const agentOrder = [
-                                                                'ROUTING_CLASSIFIER',  // Put ROUTING_CLASSIFIER at the top
-                                                                'Supervisor',          // Supervisor including Unknown agents
+                                                                'Supervisor',          // Always first
+                                                                'ROUTING_CLASSIFIER',  // Always second
                                                                 'Troubleshoot',
                                                                 'Personalization',
                                                                 'ProductRecommendation',
@@ -1732,20 +1879,7 @@ const handleInputFocus = () => {
                                             </Box>
                                         ] : []),
                                         
-                                        // Loading indicator (appears after traces, before assistant response)
-                                        ...(isLoading && !(() => {
-                                            // Only hide the loading spinner when the assistant response has content
-                                            const currentResponseMessage = messages.find(msg => msg.id === currentResponseId);
-                                            return currentResponseMessage && 
-                                                currentResponseMessage.content && 
-                                                currentResponseMessage.content !== '';
-                                        })() ? [
-                                            <ActivityStatusLoader
-                                                key="loading-indicator"
-                                                traceState={traceState}
-                                                isLoading={isLoading}
-                                            />
-                                        ] : []),
+        // We'll display the ActivityStatusLoader next to the response symbol, not here
                                         
                                         // Assistant responses (excluding greeting)
                                         ...messages
@@ -1765,10 +1899,13 @@ const handleInputFocus = () => {
                                                             type="incoming"
                                                         >
                                                             <Box color="text-status-inactive">
-                                                                <Spinner size="normal" />
-                                                                <div style={{ fontSize: '13px', color: '#718096', marginTop: '8px' }}>
-                                                                    Processing your request...
-                                                                </div>
+                                                                {/* Add the ActivityStatusLoader here to show the dynamic agent trace title */}
+                                                                <ActivityStatusLoader
+                                                                    key={`loading-indicator-${currentResponseId}`}
+                                                                    traceState={traceState}
+                                                                    isLoading={isLoading}
+                                                                    responseId={currentResponseId}
+                                                                />
                                                             </Box>
                                                         </ChatBubble>
                                                     );
@@ -1827,7 +1964,7 @@ const handleInputFocus = () => {
                                                                                             resetProcessingState();
                                                                                             
                                                                                             // Enable input field immediately for final messages
-                                                                                            setIsLoading(false);
+                                                                                            updateLoadingState(false); // Use updateLoadingState to ensure Data tab is enabled
                                                                                             setCurrentResponseId(null);
                                                                                         } else {
                                                                                             // Force clear any global timers/intervals
@@ -1836,7 +1973,7 @@ const handleInputFocus = () => {
                                                                                             // Add a small timeout to ensure state updates propagate
                                                                                             setTimeout(() => {
                                                                                                 // Enable input field
-                                                                                                setIsLoading(false);
+                                                                                                updateLoadingState(false); // Use updateLoadingState to ensure Data tab is enabled
                                                                                                 setCurrentResponseId(null);
                                                                                             }, 50);
                                                                                         }
@@ -1949,7 +2086,7 @@ const handleInputFocus = () => {
                         header={<Header variant="h2">Agentic Workflow</Header>}
                         disableContentPaddings={true}
                     >
-                        <div style={{ height: "calc(100vh - 200px)" }}>
+                        <div style={{ height: "calc(100vh - 320px)" }}>
                             <AgentFlowPanel 
                                 height="100%" 
                                 sessionId={sessionId} 
@@ -1960,6 +2097,7 @@ const handleInputFocus = () => {
                 </Box>
             )}
         </Grid>
+        </>
     );
 };
 

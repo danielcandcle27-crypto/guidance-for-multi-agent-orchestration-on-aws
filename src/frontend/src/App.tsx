@@ -4,11 +4,13 @@ import { Spinner } from "@cloudscape-design/components";
 import { I18nProvider } from "@cloudscape-design/components/i18n";
 import messages from "@cloudscape-design/components/i18n/messages/all.en";
 import "@cloudscape-design/global-styles/index.css";
-import "./common/components/chat-bubble-fixes.css"; // Fix for chat bubble content truncation
+import "./common/components/styles/chat-bubble-fixes.css"; // Fix for chat bubble content truncation
 import { Amplify } from "aws-amplify";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { FlashbarProvider } from "./common/contexts/Flashbar";
+// Import our automatic localStorage cleanup utility for initialization
+import "./utilities/localStorageCleanup"; // This will auto-initialize when imported
 import Error from "./pages/Error";
 import Home from "./pages/Home";
 import Login from "./pages/Login";

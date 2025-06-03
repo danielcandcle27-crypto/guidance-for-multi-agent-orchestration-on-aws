@@ -44,6 +44,11 @@ export class KnowledgeBaseSyncChecker extends Construct {
    */
   public readonly syncSchedule: Rule;
   
+  /**
+   * The name of the service for the sync checker
+   */
+  public readonly serviceName: string;
+  
   constructor(scope: Construct, id: string, props: KnowledgeBaseSyncCheckerProps) {
     super(scope, id);
     
@@ -93,5 +98,8 @@ export class KnowledgeBaseSyncChecker extends Construct {
         }),
       ],
     });
+    
+    // Store the service name for external reference
+    this.serviceName = serviceName;
   }
 }

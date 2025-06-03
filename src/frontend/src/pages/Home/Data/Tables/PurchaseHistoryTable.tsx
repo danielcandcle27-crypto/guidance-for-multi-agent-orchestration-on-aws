@@ -1,33 +1,70 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { Spinner, Box } from '@cloudscape-design/components';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { Spinner, Box, Alert, Button } from '@cloudscape-design/components';
 import BaseTable from './BaseTable';
 import { fetchPurchaseHistory } from '../api';
 import { FlashbarContext } from '../../../../common/contexts/Flashbar';
 
+// Storage key for tracking fetch attempts
+const PURCHASE_HISTORY_FETCH_ATTEMPT_KEY = 'purchase_history_fetch_attempted';
+
 const PurchaseHistoryTable: React.FC = () => {
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { addFlashbarItem } = useContext(FlashbarContext);
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchPurchaseHistory();
-        // Transform data if needed
-        setPurchaseHistory(data);
-      } catch (error) {
-        console.error("Error loading purchase history data:", error);
-        addFlashbarItem("error", "Failed to load purchase history data. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
+  
+  // Load data function defined with useCallback to prevent recreation on each render
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Log attempt to fetch purchase history
+      console.log("Attempting to fetch purchase history data");
+      
+      const data = await fetchPurchaseHistory();
+      
+      // Log successful fetch
+      console.log("Successfully loaded purchase history data:", data.length, "records");
+      
+      setPurchaseHistory(data);
+      
+      // Successfully loaded data, remove the fetch attempt marker
+      localStorage.removeItem(PURCHASE_HISTORY_FETCH_ATTEMPT_KEY);
+      
+    } catch (error) {
+      console.error("Error loading purchase history data:", error);
+      const errorMessage = error instanceof Error ? 
+        `Failed to load purchase history data: ${error.message}` :
+        'Failed to load purchase history data. Please try again.';
+      
+      setError(errorMessage);
+      addFlashbarItem("error", errorMessage);
+      
+      // Mark that we attempted a fetch but failed
+      localStorage.setItem(PURCHASE_HISTORY_FETCH_ATTEMPT_KEY, 'true');
+    } finally {
+      setLoading(false);
+    }
   }, [addFlashbarItem]);
 
-  // Define columns based on the expected CSV structure
+  // Reset fetch attempt function
+  const resetFetchAttempt = useCallback(() => {
+    localStorage.removeItem(PURCHASE_HISTORY_FETCH_ATTEMPT_KEY);
+    loadData(); // Directly call loadData instead of setting state that triggers useEffect
+  }, [loadData]);
+
+  // Initial data loading on component mount - only runs once
+  useEffect(() => {
+    loadData();
+    
+    // If there was a previous failed attempt, clear it
+    if (localStorage.getItem(PURCHASE_HISTORY_FETCH_ATTEMPT_KEY) === 'true') {
+      console.log("Clearing previous fetch attempt marker to enable retry");
+      localStorage.removeItem(PURCHASE_HISTORY_FETCH_ATTEMPT_KEY);
+    }
+  }, [loadData]); // Only depends on the stable loadData function
+
   const columnDefinitions = [
     {
       id: "customer_id",
@@ -54,8 +91,8 @@ const PurchaseHistoryTable: React.FC = () => {
       sortingField: "quantity"
     },
     {
-      id: "price",
-      header: "Price",
+      id: "purchase_amount",
+      header: "Purchase Amount",
       cell: item => `$${item.purchase_amount}`,
       sortingField: "purchase_amount"
     },
@@ -70,18 +107,18 @@ const PurchaseHistoryTable: React.FC = () => {
   // Define filtering properties for the property filter
   const filteringProperties = [
     {
-      propertyKey: "customer_id",
-      filteringOption: {
-        key: "customer_id",
-        value: "customer_id",
-        operator: "=",
-      }
-    },
-    {
       propertyKey: "payment_method",
       filteringOption: {
         key: "payment_method",
         value: "payment_method",
+        operator: "=",
+      }
+    },
+    {
+      propertyKey: "customer_id",
+      filteringOption: {
+        key: "customer_id",
+        value: "customer_id",
         operator: "=",
       }
     }
@@ -94,6 +131,19 @@ const PurchaseHistoryTable: React.FC = () => {
         <Box variant="p" padding={{ top: "s" }}>
           Loading purchase history data...
         </Box>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box padding="l">
+        <Alert type="error" header="Error loading purchase history data">
+          {error}
+          <Box padding={{ top: "m" }}>
+            <Button onClick={resetFetchAttempt}>Retry</Button>
+          </Box>
+        </Alert>
       </Box>
     );
   }

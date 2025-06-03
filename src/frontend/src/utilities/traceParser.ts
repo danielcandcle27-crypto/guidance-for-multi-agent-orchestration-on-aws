@@ -21,6 +21,8 @@ export interface Task {
   _agentId?: string;  // Track which agent this task belongs to
   _modelInvocationId?: string;  // For identifying paired model input/output operations
   _sequenceNumber?: number;  // Track the chronological sequence of tasks regardless of stepNumber
+  _isRoutingClassifierParent?: boolean;  // Marks a task as a routing classifier parent
+  _finalResponseDispatched?: boolean; // Tracks if a final response has been dispatched for this task
 }
 
 export interface TraceGroup {
@@ -38,6 +40,15 @@ export interface TraceGroup {
   isComplete?: boolean; // Whether this trace group has completed its work
   finalElapsedTime?: string; // Final elapsed time when trace is completed
   agentName?: string; // Agent name for routing classifier filtering
+  hasFinalResponse?: boolean; // Generic flag for any agent with a final response
+  isSupervisorFinalResponse?: boolean; // Whether this trace group contains a Supervisor final response
+  finalResponseTimestamp?: number; // Timestamp when the final response was detected
+  finalResponseContent?: string; // Content of the final response
+  finalResponseProcessed?: boolean; // Whether the final response has been processed and displayed
+  collaborationConfig?: { // Configuration for collaboration between agents
+    supervisorWithRouting?: boolean;
+    enabled?: boolean;
+  };
   _debug?: { // Debug information for troubleshooting
     detectedType?: string;
     rawAgentId?: string;
@@ -79,24 +90,24 @@ export function getModelLabelForTrace(traceType: string): string {
   switch (traceType) {
     case AGENT_TYPES.SUPERVISOR:
     case 'Supervisor':
-      return 'Nova Pro';
+      return 'Nova Premier';
     case AGENT_TYPES.PRODUCT_RECOMMENDATION:
     case 'ProductRecommendation':
-      return 'Sonnet 3.5 V2';
+      return 'Nova Lite';
     case AGENT_TYPES.TROUBLESHOOT:
     case 'Troubleshoot':
-      return 'Haiku 3.5';
+      return 'DeepSeek-R1';
     case AGENT_TYPES.PERSONALIZATION:
     case 'Personalization':
-      return 'Sonnet 3 V1';
+      return 'Claude Sonnet 3.7 v1';
     case AGENT_TYPES.ORDER_MANAGEMENT:
     case 'OrderManagement':
-      return 'Sonnet 3 V1';
+      return 'Claude 3.5 Haiku';
     case AGENT_TYPES.ROUTING_CLASSIFIER:
       return 'Nova Micro V1';
     default:
       // Default to Supervisor model for unknown traces
-      return 'Nova Pro';
+      return 'Not detected';
   }
 }
 
@@ -151,18 +162,56 @@ function getAgentTypeFromTrace(traceData: any): string {
     'Has supervisorTraits': hasSupervisorTraits
   });
 
-  // --- MOST DIRECT APPROACH: Use exact agentName matches ---
-  // This is the most reliable approach and should be used when available
-  if (traceData?.agentName === 'ROUTING_CLASSIFIER') {
-    console.log('EXACT MATCH: agentName === ROUTING_CLASSIFIER');
-    return AGENT_TYPES.ROUTING_CLASSIFIER;
-  }
-  
+  // --- PRIMARY DETECTION: Check for exact agentName match for Supervisor ---
+  // This is the highest priority check as requested
   if (traceData?.agentName === 'Supervisor') {
     console.log('EXACT MATCH: agentName === Supervisor');
+    
+    // Ensure collaboration configuration with "supervisor with routing" is enabled
+    // Add this property to the trace data for later use in UI
+    if (traceData) {
+      traceData.collaborationConfig = {
+        supervisorWithRouting: true,
+        enabled: true
+      };
+      console.log('Enabled supervisor with routing collaboration configuration');
+    }
+    
     return AGENT_TYPES.SUPERVISOR;
   }
   
+  // --- PRIMARY DETECTION: Check for ROUTING_CLASSIFIER in the ModelInvocationInput type ---
+  // Now all ROUTING_CLASSIFIER traces are redirected to the Supervisor agent
+  // We maintain the log statements for debugging but return AGENT_TYPES.SUPERVISOR instead
+  
+  // First check for type field at the top-level of the trace object
+  if (traceData?.type === "ROUTING_CLASSIFIER") {
+    console.log('EXACT MATCH: traceData.type === ROUTING_CLASSIFIER - returning Supervisor type');
+    return AGENT_TYPES.SUPERVISOR;
+  }
+  
+  // Then check for agentName exact match
+  if (traceData?.agentName === 'ROUTING_CLASSIFIER') {
+    console.log('EXACT MATCH: agentName === ROUTING_CLASSIFIER - returning Supervisor type');
+    return AGENT_TYPES.SUPERVISOR;
+  }
+  
+  // Comprehensive check for the ModelInvocationInput structure that has type="ROUTING_CLASSIFIER"
+  // This is a direct indicator of a routing classifier operation following the example structure
+  if (traceData?.trace?.orchestrationTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
+      traceData?.trace?.preProcessingTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
+      traceData?.trace?.postProcessingTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
+      traceData?.trace?.routingClassifierTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
+      // Check directly in modelInvocationInput at both top level and nested locations
+      traceData?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
+      // Additional check for any field that might contain type="ROUTING_CLASSIFIER" 
+      traceData?.type === "ROUTING_CLASSIFIER") {
+    console.log('EXACT MATCH: modelInvocationInput.type === ROUTING_CLASSIFIER - returning Supervisor type');
+    return AGENT_TYPES.SUPERVISOR;
+  }
+  
+  // --- OTHER AGENT TYPES CHECKS ---
+  // These remain unchanged but with lower priority
   if (traceData?.agentName === 'ProductRecommendation') {
     console.log('EXACT MATCH: agentName === ProductRecommendation');
     return AGENT_TYPES.PRODUCT_RECOMMENDATION;
@@ -182,29 +231,18 @@ function getAgentTypeFromTrace(traceData: any): string {
     console.log('EXACT MATCH: agentName === OrderManagement');
     return AGENT_TYPES.ORDER_MANAGEMENT;
   }
-  
-  // --- DIRECT MODEL INVOCATION TYPE CHECK ---
-  // Check for type: "ROUTING_CLASSIFIER" in ModelInvocationInput 
-  // This is a direct indicator of a routing classifier operation
-  if (traceData?.trace?.orchestrationTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
-      traceData?.trace?.preProcessingTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
-      traceData?.trace?.postProcessingTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER" ||
-      traceData?.trace?.routingClassifierTrace?.modelInvocationInput?.type === "ROUTING_CLASSIFIER") {
-    console.log('EXACT MATCH: modelInvocationInput.type === ROUTING_CLASSIFIER');
-    return AGENT_TYPES.ROUTING_CLASSIFIER;
-  }
 
   // --- FALLBACK 1: Check for agentName fuzzy matches if exact match fails ---
   if (traceData?.agentName) {
     const normalizedAgentName = traceData.agentName.toLowerCase();
     
-    // Routing classifier detection - check agentName ONLY
+    // Routing classifier detection - redirect to Supervisor
     if (normalizedAgentName.includes('routing') || 
         normalizedAgentName.includes('classifier') ||
         normalizedAgentName === 'routing_classifier' || 
         traceData.agentName === 'ROUTING_CLASSIFIER') {
-      console.log(`Agent name match for routing_classifier: ${traceData.agentName}`);
-      return AGENT_TYPES.ROUTING_CLASSIFIER;
+      console.log(`Agent name match for routing_classifier: ${traceData.agentName} - returning Supervisor type`);
+      return AGENT_TYPES.SUPERVISOR;
     }
 
     // Supervisor detection - check agentName ONLY
@@ -250,17 +288,17 @@ function getAgentTypeFromTrace(traceData: any): string {
   // --- SECOND PRIORITY: Check trace structure patterns for legacy trace formats ---
   // This is important for traces that don't have agentName field
   
-  // Check for routing classifier by structure
+  // Check for routing classifier by structure - redirect to Supervisor
   if (traceData?.trace?.routingClassifierTrace) {
-    console.log('Detected routing classifier by trace structure (legacy format)');
-    return AGENT_TYPES.ROUTING_CLASSIFIER;
+    console.log('Detected routing classifier by trace structure (legacy format) - returning Supervisor type');
+    return AGENT_TYPES.SUPERVISOR;
   }
   
-  // Additional structural checks for routing classifier
+  // Additional structural checks for routing classifier - redirect to Supervisor
   if (traceData?.trace?.trace_type === 'routing_classifier' || 
       traceData?.trace_type === 'routing_classifier') {
-    console.log('Detected routing classifier by trace_type field (legacy format)');
-    return AGENT_TYPES.ROUTING_CLASSIFIER;
+    console.log('Detected routing classifier by trace_type field (legacy format) - returning Supervisor type');
+    return AGENT_TYPES.SUPERVISOR;
   }
   
   // Structural checks for supervisor
@@ -295,10 +333,10 @@ function getAgentTypeFromTrace(traceData: any): string {
   const agentNameType = getAgentTypeByName(traceData.agentName);
   if (agentNameType) return agentNameType;
   
-  // --- FOURTH PRIORITY: Check routing classifier by ID patterns ---
+  // --- FOURTH PRIORITY: Check routing classifier by ID patterns - redirect to Supervisor ---
   if (isRoutingClassifierAgent(traceData.agentId, traceData.agentAliasId)) {
-    console.log('Identified routing classifier by ID match');
-    return AGENT_TYPES.ROUTING_CLASSIFIER;
+    console.log('Identified routing classifier by ID match - returning Supervisor type');
+    return AGENT_TYPES.SUPERVISOR;
   }
   
   // --- FIFTH PRIORITY: Use pattern matching on agent IDs ---
@@ -356,8 +394,8 @@ function getAgentTypeFromTrace(traceData: any): string {
       }
       
       if (text.includes('routing') || text.includes('classifier') || text.includes('ROUTING_CLASSIFIER')) {
-        console.log('Identified routing classifier by model input text');
-        return AGENT_TYPES.ROUTING_CLASSIFIER;
+        console.log('Identified routing classifier by model input text - returning Supervisor type');
+        return AGENT_TYPES.SUPERVISOR;
       }
     }
   }
@@ -441,6 +479,10 @@ function getStepTitle(traceContent: any): string {
 
   // First check for routing classifier specific traces
   if (traceContent.trace?.routingClassifierTrace) {
+    // Set parent task title for routing classifier traces
+    if (traceContent._isRoutingClassifierParent) {
+      return "Routing Classifier";
+    }
     // Check for various components in order of specificity
     if (traceContent.trace.routingClassifierTrace.modelInvocationInput) {
       return "Classifying Intent";
@@ -818,6 +860,44 @@ function shouldIncrementStepCounter(stepTitle: string, existingTraceGroup: Trace
   return shouldIncrement;
 }
 
+// Helper function to find a model invocation parent task
+function findModelInvocationParentTask(tasks: Task[], agentId: string, forOutput: boolean = false): number {
+  // Look for a suitable "Invoking Model" parent task, starting from the most recent
+  for (let i = tasks.length - 1; i >= 0; i--) {
+    const task = tasks[i];
+    if (task.title.includes("Invoking Model") && 
+        (task._agentId === agentId || !task._agentId)) {
+      
+      if (forOutput) {
+        // When looking for a parent for Model Output, find a task that already has Model Input
+        // but doesn't have Model Output yet
+        if (task.subTasks && 
+            task.subTasks.some(st => st.title.includes("Model Input")) &&
+            !task.subTasks.some(st => st.title.includes("Model Output"))) {
+          console.log(`Found existing Model Invocation parent with Input but no Output yet at index ${i}`);
+          return i;
+        }
+      } else {
+        // For Model Input or general case
+        // If the task has no subtasks at all, it's a good candidate
+        if (!task.subTasks || task.subTasks.length === 0) {
+          return i;
+        }
+        
+        // Or if it has subtasks but none are Model Input/Output yet
+        if (task.subTasks && 
+            !task.subTasks.some(st => 
+              st.title.includes("Model Input") || st.title.includes("Model Output"))) {
+          return i;
+        }
+      }
+    }
+  }
+  
+  // No suitable parent found
+  return -1;
+}
+
 // Classify a trace item to determine if it should be a subtask
 function isSubtaskTrace(traceType: string, stepTitle: string): boolean {
   // These are parent task titles - they should be top-level steps
@@ -826,7 +906,11 @@ function isSubtaskTrace(traceType: string, stepTitle: string): boolean {
       stepTitle === "Knowledge Base Tool" || 
       stepTitle.includes("Knowledge Base Tool (") ||
       stepTitle.includes("Action Group Tool") ||
-      shouldIncrementStepCounter(stepTitle, null)) {
+      stepTitle === "Routing Classifier" ||  // Make "Routing Classifier" a main step
+      (stepTitle !== "Classifying Intent" && 
+       stepTitle !== "Routing Classifier Decision" &&
+       stepTitle !== "Routing Classification" &&
+       shouldIncrementStepCounter(stepTitle, null))) {
     // Special case for "Invoking Model" - first occurrence is a main step,
     // subsequent occurrences should be subtasks handled in processTraceData
     if (stepTitle === "Invoking Model") {
@@ -843,8 +927,11 @@ function isSubtaskTrace(traceType: string, stepTitle: string): boolean {
       stepTitle === "Action Group Input" ||
       stepTitle === "Action Group Output" ||
       stepTitle === "Action Group" || // Plain "Action Group" is always a subtask
-      stepTitle === "Model Input" ||  // Model invocation subtasks
-      stepTitle === "Model Output" || // Model invocation subtasks
+      stepTitle === "Model Input" ||  // Model invocation subtasks - ALWAYS subtasks
+      stepTitle === "Model Output" || // Model invocation subtasks - ALWAYS subtasks
+      stepTitle === "Classifying Intent" ||  // Make routing classifier traces subtasks
+      stepTitle === "Routing Classifier Decision" ||  // Make routing classifier traces subtasks
+      stepTitle === "Routing Classification" ||  // Make routing classifier traces subtasks
       stepTitle.toLowerCase().includes("knowledge base query") ||
       stepTitle.toLowerCase().includes("knowledge base results") ||
       stepTitle.toLowerCase().includes("action group input") ||
@@ -881,6 +968,11 @@ export function addSubTask(
     // If the parent task doesn't have content but the subtask does,
     // add a placeholder to ensure the dropdown displays properly
     parentTask.content = "This step contains multiple substeps...";
+  }
+  
+  // For model invocation parent tasks, always use a specific content
+  if (parentTask.title.includes("Invoking Model")) {
+    parentTask.content = "Model invocation details in subtasks below";
   }
   
   // Check if we already have a subtask with a similar title (ignoring timing info)
@@ -972,6 +1064,14 @@ export function processTraceData(
   
   // Extract specific trace step details
   const stepTitle = getStepTitle(rawTraceData);
+  
+  // Check if this is a routing classifier trace that requires a parent
+  // We need to identify both explicit routing classifier traces and those with specific step titles
+  const isRoutingClassifierTrace = rawTraceData.trace?.routingClassifierTrace && 
+                                  (rawTraceData.trace.routingClassifierTrace.modelInvocationInput ||
+                                   rawTraceData.trace.routingClassifierTrace.modelInvocationOutput ||
+                                   stepTitle === "Classifying Intent" ||
+                                   stepTitle === "Routing Classifier Decision");
   const knowledgeBaseType = getKnowledgeBaseOperationType(rawTraceData);
   const actionGroupType = getActionGroupOperationType(rawTraceData);
   const modelInvocationType = getModelInvocationOperationType(rawTraceData);
@@ -1010,6 +1110,11 @@ export function processTraceData(
   let parentTaskIndex = -1;
   let subtaskType = null;
   
+  // Check if this is a routing classifier trace that should be nested
+  if (isRoutingClassifierTrace) {
+    subtaskType = getStepTitle(rawTraceData); // Use the specific type (e.g., "Classifying Intent")
+  }
+  
   if (knowledgeBaseType) {
     subtaskType = knowledgeBaseType;
   } else if (actionGroupType) {
@@ -1045,6 +1150,26 @@ export function processTraceData(
       // Default to 1 if no numbered tasks exist yet
       const highestStepNumber = taskNumbers.length > 0 ? Math.max(...taskNumbers) : 0;
       
+      // Special handling for routing classifier traces
+      if (isRoutingClassifierTrace) {
+        // Look for an existing "Routing Classifier" parent task
+        const routingClassifierParentIndex = existingTraceGroup.tasks.findIndex(task => 
+          task.title.includes("Routing Classifier") && !task.title.includes("Decision")
+        );
+        
+        if (routingClassifierParentIndex >= 0) {
+          // Found a routing classifier parent, use it
+          parentTaskIndex = routingClassifierParentIndex;
+          console.log(`Found existing Routing Classifier parent at index ${parentTaskIndex}`);
+          // Use the same step number as the parent
+          stepNumber = existingTraceGroup.tasks[parentTaskIndex].stepNumber;
+        } else {
+          // No routing classifier parent found, need to create one
+          // Will be handled below
+          console.log('No Routing Classifier parent found, will create one');
+        }
+      }
+      
       // Special handling for "Invoking Model" to ensure proper sequence numbering
       if (stepTitle === "Invoking Model") {
         // Create or extract model invocation ID
@@ -1054,83 +1179,72 @@ export function processTraceData(
         const hasInput = !!rawTraceData.trace?.orchestrationTrace?.modelInvocationInput;
         const hasOutput = !!rawTraceData.trace?.orchestrationTrace?.modelInvocationOutput;
         
-        // Extract data that can help identify this specific model invocation
-        if (hasInput && rawTraceData.trace?.orchestrationTrace?.modelInvocationInput) {
-          // For input traces, create an ID based on input content
-          const input = rawTraceData.trace.orchestrationTrace.modelInvocationInput;
-          // Use timestamp or hash of input text as identifier
-          modelInvocationId = `model-${agentId}-${traceId}-${input.timestamp || Date.now()}`;
+        // First, check if this is an output trace that needs to be paired with an existing input
+        if (hasOutput && !hasInput) {
+          console.log('This is a Model Output trace - looking for matching Model Input parent');
+          
+          // Find a suitable parent task that already has a Model Input subtask but no Output yet
+          const existingParentIndex = findModelInvocationParentTask(existingTraceGroup.tasks, agentId, true);
+          
+          if (existingParentIndex >= 0) {
+            // Found a suitable parent, use its step number and add output as a subtask
+            parentTaskIndex = existingParentIndex;
+            stepNumber = existingTraceGroup.tasks[existingParentIndex].stepNumber;
+            subtaskType = "Model Output";
+            
+            console.log(`Found existing Model Invocation parent at index ${existingParentIndex}, using step ${stepNumber}`);
+            
+            // Extract the model invocation ID if present
+            if (existingTraceGroup.tasks[existingParentIndex]._modelInvocationId) {
+              modelInvocationId = existingTraceGroup.tasks[existingParentIndex]._modelInvocationId;
+              rawTraceData._modelInvocationId = modelInvocationId;
+              console.log(`Using existing model invocation ID: ${modelInvocationId}`);
+            }
+            
+            // Continue to next section - we've set up parentTaskIndex, stepNumber and subtaskType
+          } else {
+            // No suitable existing input found, create a new task with output as subtask
+            stepNumber = highestStepNumber + 1;
+            console.log(`No suitable Model Input parent found, creating new Model Invocation step ${stepNumber}`);
+            
+            // Generate a model invocation ID
+            const randomComponent = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            modelInvocationId = `model-${agentId}-${Date.now()}-${randomComponent}`;
+            rawTraceData._modelInvocationId = modelInvocationId;
+          }
+        } else if (hasInput) {
+          // This is an input trace - generate a unique model invocation ID
+          const input = rawTraceData.trace?.orchestrationTrace?.modelInvocationInput;
+          
+          // Include a content hash for uniqueness if text is available
+          let contentHash = '';
+          if (input && input.text) {
+            // Simple string hash function
+            const hashText = (str: string): string => {
+              let hash = 0;
+              for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+              }
+              // Get just the last few digits for brevity
+              return Math.abs(hash).toString().slice(-6);
+            };
+            
+            // Add a hash of the first 50 chars of input text for uniqueness
+            contentHash = `-${hashText(input.text.slice(0, 50))}`;
+          }
+          
+          // Generate a unique ID for this input
+          const randomComponent = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+          modelInvocationId = `model-${agentId}-${input?.timestamp || Date.now()}${contentHash}-${randomComponent}`;
+          rawTraceData._modelInvocationId = modelInvocationId;
           
           console.log(`Generated model input ID: ${modelInvocationId}`);
-        } else if (hasOutput && rawTraceData.trace?.orchestrationTrace?.modelInvocationOutput) {
-          // For output traces, try to match to an existing input
-          const output = rawTraceData.trace.orchestrationTrace.modelInvocationOutput;
-          // Use timestamp or id from output if available
-          modelInvocationId = `model-${agentId}-${traceId}-${output.timestamp || Date.now()}`;
           
-          console.log(`Generated model output ID: ${modelInvocationId}`);
-        }
-        
-        // Check if we already have an Invoking Model step with matching agent
-        const agentIdToMatch = rawTraceData.agentId || rawTraceData.collaboratorName || agentType;
-        
-        // We need each model invocation to be its own step, so we treat each one as new
-        // Only pair input with output if they're from the same operation
-        let existingModelStepIndex = -1;
-        
-        // For output traces, see if there's a recent model input from the same agent without an output already
-        if (hasOutput && !hasInput) {
-          // Look back through the most recent 3 tasks for a model input without an output
-          for (let i = existingTraceGroup.tasks.length - 1; i >= Math.max(0, existingTraceGroup.tasks.length - 3); i--) {
-            const task = existingTraceGroup.tasks[i];
-            
-            // Check if this is a model invocation step for the same agent
-            if (task.title.includes("Invoking Model") && 
-                (task._agentId === agentIdToMatch || !task._agentId)) {
-              
-              // Check if it has an input but no output subtask yet
-              if (task.subTasks && 
-                  task.subTasks.some(subtask => subtask.title.includes("Model Input")) &&
-                  !task.subTasks.some(subtask => subtask.title.includes("Model Output"))) {
-                
-                console.log(`Found matching model input step without output at index ${i}`);
-                existingModelStepIndex = i;
-                break;
-              }
-            }
-          }
-        }
-        
-        // If we found an existing Invoking Model step
-        if (existingModelStepIndex >= 0) {
-          const existingModelStep = existingTraceGroup.tasks[existingModelStepIndex];
-          
-          // Use the existing step number
-          stepNumber = existingModelStep.stepNumber;
-          console.log(`Found existing Invoking Model step with number ${stepNumber}`);
-          
-          // Update model invocation ID if it's not already set
-          if (modelInvocationId && !existingModelStep._modelInvocationId) {
-            existingModelStep._modelInvocationId = modelInvocationId;
-          }
-          
-          // Instead of creating a new task, we'll update this existing task
-          // by adding the new data as a subtask
-          parentTaskIndex = existingModelStepIndex;
-          
-          // Set subtask type based on what we're processing
-          if (hasInput) {
-            subtaskType = "Model Input";
-          } else if (hasOutput) {
-            subtaskType = "Model Output";
-          }
-        } else {
-          // No existing Invoking Model step found, create a new one with a new step number
+          // Get a new step number for this input
           stepNumber = highestStepNumber + 1;
-          console.log(`Creating new Invoking Model step with number ${stepNumber} and ID ${modelInvocationId}`);
-          
-          // Pass the model invocation ID to the new task
-          rawTraceData._modelInvocationId = modelInvocationId;
+          console.log(`Creating new Model Invocation step ${stepNumber} for input with ID ${modelInvocationId}`);
         }
       } 
       // Check if we should increment step or add subtask for other types
@@ -1202,12 +1316,68 @@ export function processTraceData(
             .map(task => task.stepNumber)
         );
         
-        // Only increment for specific types that are truly new steps
+      // Enhanced handling for "Invoking Model" steps to ensure inputs and outputs use the same step number
+    if (stepTitle === "Invoking Model") {
+      const hasInput = !!rawTraceData.trace?.orchestrationTrace?.modelInvocationInput;
+      const hasOutput = !!rawTraceData.trace?.orchestrationTrace?.modelInvocationOutput;
+
+      // For outputs without inputs, try aggressive pairing with existing model input steps
+      if (hasOutput && !hasInput) {
+        // Try to find ANY model step with input but no output first
+        console.log(`⚠️ CRITICAL OUTPUT PAIRING: Looking for input-only model invocation step`);
+        let foundMatch = false;
+        
+        // Look through all tasks for a model step with input but no output 
+        for (let i = existingTraceGroup.tasks.length - 1; i >= 0; i--) {
+          const task = existingTraceGroup.tasks[i];
+          
+          if (task.title.includes("Invoking Model")) {
+            // Check if it has Model Input but no Model Output
+            if (task.subTasks && 
+                task.subTasks.some(st => st.title.includes("Model Input")) &&
+                !task.subTasks.some(st => st.title.includes("Model Output"))) {
+              
+              console.log(`✅ FOUND MATCHING INPUT! Using step ${task.stepNumber} at index ${i}`);
+              
+              // Found a match - use this step's number and index
+              stepNumber = task.stepNumber;
+              parentTaskIndex = i;
+              
+              // Set up to add Model Output as a subtask
+              subtaskType = "Model Output";
+              foundMatch = true;
+              break;
+            }
+          }
+        }
+        
+        // If we found a match, don't create a new task
+        if (foundMatch) {
+          console.log(`PAIRED: Output trace will be added to step ${stepNumber}`);
+        } else {
+          // No matching input found, create a new step
+          stepNumber = lastStepNumber + 1; 
+          console.log(`NO MATCH: Creating new step ${stepNumber} for output`);
+        }
+      } else if (hasInput) {
+        // For input traces, always create a new step
+        stepNumber = lastStepNumber + 1;
+        console.log(`Creating step ${stepNumber} for input`);
+      } else {
+        // For other model traces, use standard logic
         if (shouldIncrementStepCounter(stepTitle, existingTraceGroup)) {
           stepNumber = lastStepNumber + 1;
         } else {
           stepNumber = lastStepNumber;
         }
+      }
+    }
+    // Regular step with incremented number
+    else if (shouldIncrementStepCounter(stepTitle, existingTraceGroup)) {
+      stepNumber = lastStepNumber + 1;
+    } else {
+      stepNumber = lastStepNumber;
+    }
       }
     }
     
@@ -1234,33 +1404,92 @@ export function processTraceData(
     // This is important for special trace types like Rationale that have stepNumber = 0
     let sequenceNumber = 0;
     if (existingTraceGroup && existingTraceGroup.tasks && existingTraceGroup.tasks.length > 0) {
-      // Find the highest sequence number used so far and increment
-      sequenceNumber = Math.max(...existingTraceGroup.tasks
-        .filter(task => task._sequenceNumber !== undefined)
-        .map(task => task._sequenceNumber || 0)) + 1;
+      // Special case for "Rationale" - always position it after Routing Classifier (Step 1) and before Step 2
+      if (stepTitle === "Rationale") {
+        // Position it at 1.5 to be after Step 1 (Routing Classifier) but before Step 2
+        sequenceNumber = 1.5;
+      } else {
+        // Find the highest sequence number used so far and increment
+        sequenceNumber = Math.max(...existingTraceGroup.tasks
+          .filter(task => task._sequenceNumber !== undefined)
+          .map(task => task._sequenceNumber || 0)) + 1;
+      }
     }
     
-    // Create trace task entry
-    const traceTask: Task = {
-      stepNumber: stepNumber,
-      title: taskTitle,
-      // For special step types, set content appropriately
-      content: (stepTitle === "Invoking Model") ? 
-                 "Model invocation details in subtasks below" : 
-               (stepTitle.includes("Knowledge Base Tool")) ?
-                 displayContent || message :
-               (stepTitle.includes("Action Group Tool")) ?
-                 displayContent || message :
-                 displayContent || message,
-      fullJson: fullJsonContent,
-      timestamp: currentTime,
-      _agentId: agentId,  // Track which agent this task belongs to
-      _modelInvocationId: rawTraceData._modelInvocationId,  // Use the model invocation ID if available
-      _sequenceNumber: sequenceNumber  // Add sequence number for chronological ordering
-    };
+  // Create trace task entry
+  const traceTask: Task = {
+    stepNumber: stepNumber,
+    title: taskTitle,
+    // For special step types, set content appropriately
+    content: (stepTitle === "Invoking Model") ? 
+               "Model invocation details in subtasks below" : 
+             (stepTitle.includes("Knowledge Base Tool")) ?
+               displayContent || message :
+             (stepTitle.includes("Action Group Tool")) ?
+               displayContent || message :
+             (stepTitle === "Routing Classifier") ?
+               "Routing classifier operations" :
+               displayContent || message,
+    fullJson: fullJsonContent,
+    timestamp: currentTime,
+    _agentId: agentId,  // Track which agent this task belongs to
+    _modelInvocationId: rawTraceData._modelInvocationId,  // Use the model invocation ID if available
+    _sequenceNumber: sequenceNumber  // Add sequence number for chronological ordering
+  };
     
-    // Special case for subtasks
-    if (parentTaskIndex >= 0 && subtaskType) {
+  // Special case for routing classifier traces - ENHANCED version to ensure proper nesting structure
+    if (isRoutingClassifierTrace) {
+      // If we need a parent and don't have one yet
+      if (parentTaskIndex < 0) {
+        // Create a parent "Routing Classifier" task - always step 1
+        const parentTask: Task = {
+          stepNumber: 1, // Always step 1 for Routing Classifier
+          title: `Step 1: Routing Classifier (${individualStepTime}s)`,
+          content: "Routing classifier operations",
+          fullJson: null,
+          timestamp: currentTime,
+          _agentId: agentId,
+          _isRoutingClassifierParent: true,  // Mark as routing classifier parent
+          _sequenceNumber: 1,  // Always first in sequence order
+          subTasks: []  // Initialize subtasks array
+        };
+        
+        // Add the parent task
+        existingTraceGroup.tasks.push(parentTask);
+        
+        // Get the index of the newly added parent task
+        parentTaskIndex = existingTraceGroup.tasks.length - 1;
+        console.log(`Created new Routing Classifier parent task at index ${parentTaskIndex}`);
+      }
+      
+      // Add the routing classifier trace as a subtask with correct nesting structure
+      const parentTask = existingTraceGroup.tasks[parentTaskIndex];
+      
+      // Make sure the specific subtypes appear under Routing Classifier properly
+      // This ensures "Classifying Intent" and "Routing Classifier Decision" are properly nested
+      if (stepTitle === "Classifying Intent" || stepTitle === "Routing Classifier Decision") {
+        // Use the exact step title to preserve the hierarchy
+        addSubTask(
+          parentTask,
+          stepTitle, // Using the exact step title preserves the hierarchical structure
+          displayContent || message,
+          fullJsonContent,
+          currentTime
+        );
+        console.log(`Added ${stepTitle} as a properly nested subtask under Routing Classifier`);
+      } else {
+        // For other routing classifier operations
+        addSubTask(
+          parentTask,
+          subtaskType || "Routing Classifier Operation",
+          displayContent || message,
+          fullJsonContent,
+          currentTime
+        );
+      }
+    }
+    // Other subtask types
+    else if (parentTaskIndex >= 0 && subtaskType) {
       const parentTask = existingTraceGroup.tasks[parentTaskIndex];
       addSubTask(
         parentTask,
@@ -1352,52 +1581,138 @@ export function processTraceData(
         parentTask.subTasks.unshift(kbQuerySubtask);
       }
       // Handle Action Group tasks
-      else if (stepTitle.includes("Action Group Tool")) {
-        // Create an Action Group Input subtask with the input data
-        const timeDifference = ((currentTime - parentTask.timestamp) / 1000).toFixed(2);
-        const formattedTime = parseFloat(timeDifference).toFixed(2);
+    else if (stepTitle.includes("Action Group Tool")) {
+      // Create an Action Group Input subtask with the input data
+      const timeDifference = ((currentTime - parentTask.timestamp) / 1000).toFixed(2);
+      const formattedTime = parseFloat(timeDifference).toFixed(2);
+      
+      // Get the action group input content
+      let actionContent = displayContent || "Action group input";
+      if (rawTraceData.trace?.orchestrationTrace?.invocationInput?.actionGroupInvocationInput) {
+        const actionInput = rawTraceData.trace.orchestrationTrace.invocationInput.actionGroupInvocationInput;
         
-        // Get the action group input content
-        let actionContent = displayContent || "Action group input";
-        if (rawTraceData.trace?.orchestrationTrace?.invocationInput?.actionGroupInvocationInput) {
-          const actionInput = rawTraceData.trace.orchestrationTrace.invocationInput.actionGroupInvocationInput;
-          
-          // Try to extract meaningful content
-          if (actionInput.requestBody?.content?.['application/json']) {
-            const jsonContent = actionInput.requestBody.content['application/json'];
-            if (Array.isArray(jsonContent) && jsonContent.length > 0 && jsonContent[0].value) {
-              actionContent = JSON.stringify(jsonContent[0].value, null, 2);
-            } else {
-              actionContent = JSON.stringify(jsonContent, null, 2);
-            }
+        // Try to extract meaningful content
+        if (actionInput.requestBody?.content?.['application/json']) {
+          const jsonContent = actionInput.requestBody.content['application/json'];
+          if (Array.isArray(jsonContent) && jsonContent.length > 0 && jsonContent[0].value) {
+            actionContent = JSON.stringify(jsonContent[0].value, null, 2);
           } else {
-            actionContent = JSON.stringify(actionInput, null, 2);
+            actionContent = JSON.stringify(jsonContent, null, 2);
           }
+        } else {
+          actionContent = JSON.stringify(actionInput, null, 2);
         }
-        
-        // Set the parent task content to be a descriptive text (not just placeholder)
-        // This prevents an intermediate dropdown from forming
-        parentTask.content = "Action group tool details:";
-        
-        // Create and add the Action Group Input subtask
-        const actionGroupSubtask: SubTask = {
-          title: `Action Group Input (${formattedTime}s)`,
-          content: actionContent,
-          fullJson: fullJsonContent,
-          timestamp: currentTime
-        };
-        
-        // Add this at the beginning of subtasks array
-        parentTask.subTasks.unshift(actionGroupSubtask);
       }
+      
+      // Set the parent task content to be a descriptive text (not just placeholder)
+      // This prevents an intermediate dropdown from forming
+      parentTask.content = "Action group tool details:";
+      
+      // Create and add the Action Group Input subtask
+      const actionGroupSubtask: SubTask = {
+        title: `Action Group Input (${formattedTime}s)`,
+        content: actionContent,
+        fullJson: fullJsonContent,
+        timestamp: currentTime
+      };
+      
+      // Add this at the beginning of subtasks array
+      parentTask.subTasks.unshift(actionGroupSubtask);
+    } 
+    // Special case for initial Routing Classifier traces when creating a new trace group
+    else if (isRoutingClassifierTrace) {
+      // Create a "Routing Classifier" parent task with this as its first subtask - always step 1
+      const routingClassifierTask: Task = {
+        stepNumber: 1, // Always step 1 for Routing Classifier
+        title: `Step 1: Routing Classifier (0.00s)`,
+        content: "Routing classifier operations",
+        fullJson: null,
+        timestamp: currentTime,
+        _agentId: agentId,
+        _isRoutingClassifierParent: true,
+        _sequenceNumber: 1, // Always first in sequence
+        subTasks: []
+      };
+      
+      // Add the subtask
+      addSubTask(
+        routingClassifierTask, 
+        subtaskType || getStepTitle(rawTraceData),
+        displayContent || message,
+        fullJsonContent,
+        currentTime
+      );
+      
+      // Add the parent task with subtask to the trace group
+      existingTraceGroup.tasks.push(routingClassifierTask);
+    }
     }
     
-    // Check if this trace indicates completion (e.g. final response)
+    // Check if this trace indicates completion (e.g. final response) - more aggressive detection
     if (stepTitle === 'Final Response' || 
-        rawTraceData.trace?.orchestrationTrace?.observation?.finalResponse) {
-      console.log('Marked trace as complete - Final Response detected');
+        rawTraceData.trace?.orchestrationTrace?.observation?.finalResponse ||
+        traceTask.title === 'Final Response') {
+      console.log('🔍 Marked trace as complete - Final Response detected with timestamp', Date.now());
+      
+      // Calculate accumulated time from all tasks and subtasks - this ensures consistency with TraceGroup.tsx
+      let totalTime = 0;
+      
+      // Process main tasks
+      if (existingTraceGroup.tasks && Array.isArray(existingTraceGroup.tasks)) {
+        existingTraceGroup.tasks
+          .filter(task => task.stepNumber > 0)
+          .forEach(task => {
+            // First, extract time from task title
+            const timeMatch = task.title.match(/\((\d+\.\d+)s\)/);
+            const stepTime = timeMatch ? parseFloat(timeMatch[1]) : 0;
+            totalTime += stepTime;
+            
+            // Then add all subtask times if they exist
+            if (task.subTasks && Array.isArray(task.subTasks)) {
+              task.subTasks.forEach(subtask => {
+                const subTimeMatch = subtask.title.match(/\((\d+\.\d+)s\)/);
+                const subStepTime = subTimeMatch ? parseFloat(subTimeMatch[1]) : 0;
+                totalTime += subStepTime;
+              });
+            }
+          });
+      }
+      
+      // Extract the actual final response content - this applies to all agents
+      const finalResponseContent = 
+        rawTraceData.trace?.orchestrationTrace?.observation?.finalResponse?.text ||
+        displayContent ||
+        message;
+      
+      // Set common final response properties for all agent types
       existingTraceGroup.isComplete = true;
-      existingTraceGroup.finalElapsedTime = formattedTimeDifference;
+      existingTraceGroup.finalElapsedTime = totalTime.toFixed(2);
+      existingTraceGroup.hasFinalResponse = true;
+      existingTraceGroup.finalResponseTimestamp = Date.now();
+      existingTraceGroup.finalResponseContent = finalResponseContent;
+      
+      // Special handling for Supervisor agent final responses - dispatch events for UI rendering
+      if (agentType === AGENT_TYPES.SUPERVISOR) {
+        if (finalResponseContent) {
+          // Mark this trace group as having a final supervisor response
+          existingTraceGroup.isSupervisorFinalResponse = true;
+          
+          // Dispatch a custom event for immediate rendering of Supervisor final response
+          const supervisorFinalResponseEvent = new CustomEvent('supervisorFinalResponse', {
+            detail: {
+              content: finalResponseContent,
+              traceId: groupId,
+              timestamp: Date.now(),
+              traceGroup: existingTraceGroup
+            }
+          });
+          console.log('🔔 [traceParser] Dispatching supervisorFinalResponse event');
+          document.dispatchEvent(supervisorFinalResponseEvent);
+        }
+      } else {
+        // For non-Supervisor agents, log the final response detection but don't dispatch UI events
+        console.log(`Final response detected for ${agentType} agent: ${finalResponseContent.substring(0, 50)}...`);
+      }
     }
     
     // Also update the text content for summary display
@@ -1488,36 +1803,62 @@ export function processTraceData(
       }
     }
     
-    // Create initial trace task entry
+  // Special handling for "Classifying Intent" and "Routing Classifier Decision" to always be nested
+  if (stepTitle === "Classifying Intent" || stepTitle === "Routing Classifier Decision") {
+    // Create a parent "Routing Classifier" task first
+    const routingClassifierTask: Task = {
+      stepNumber: 1, // Always step 1 for Routing Classifier
+      title: `Step 1: Routing Classifier (0.00s)`,
+      content: "Routing classifier operations",
+      fullJson: null,
+      timestamp: currentTime,
+      _groupId: groupId,
+      _agentId: agentId,
+      _isRoutingClassifierParent: true,
+      _sequenceNumber: 1, // Always first in sequence
+      subTasks: []
+    };
+    
+    // Create the subtask ("Classifying Intent" or "Routing Classifier Decision")
+    const subtask: SubTask = {
+      title: `${stepTitle} (0.00s)`,
+      content: displayContent || message,
+      fullJson: fullJsonContent,
+      timestamp: currentTime
+    };
+    
+    // Add the subtask to the parent
+    routingClassifierTask.subTasks = [subtask];
+    
+    // Add the parent task with subtask to the trace group
+    traceGroup.tasks.push(routingClassifierTask);
+  } else {
+    // Normal case - create initial trace task entry
     const traceTask: Task = {
       stepNumber: stepNumber,
       title: taskTitle,
       // For special step types, set content appropriately
       content: (stepTitle === "Invoking Model") ? 
-                 "Model invocation details in subtasks below" : 
-               (stepTitle.includes("Knowledge Base Tool")) ?
-                 displayContent || message :
-               (stepTitle.includes("Action Group Tool")) ?
-                 displayContent || message :
-                 displayContent || message,
+                "Model invocation details in subtasks below" : 
+              (stepTitle.includes("Knowledge Base Tool")) ?
+                displayContent || message :
+              (stepTitle.includes("Action Group Tool")) ?
+                displayContent || message :
+                displayContent || message,
       fullJson: fullJsonContent,
       timestamp: currentTime,
       _groupId: groupId,
       _agentId: agentId,  // Track which agent this task belongs to
-      _modelInvocationId: rawTraceData._modelInvocationId  // Set model invocation ID if available
+      _modelInvocationId: rawTraceData._modelInvocationId,  // Set model invocation ID if available
+      subTasks: [] // Initialize subtasks array for all tasks
     };
     
     traceGroup.tasks.push(traceTask);
     
-    // Handle special step types with appropriate subtasks for new trace groups
-    
-    // Initialize subTasks array if needed for any special step type
+    // Handle special step types with appropriate subtasks
     if (stepTitle === "Invoking Model" || 
         stepTitle.includes("Knowledge Base Tool") || 
         stepTitle.includes("Action Group Tool:")) {
-      if (!traceTask.subTasks) {
-        traceTask.subTasks = [];
-      }
       
       const timeDifference = ((currentTime - traceTask.timestamp) / 1000).toFixed(2);
       const formattedTime = parseFloat(timeDifference).toFixed(2);
@@ -1624,8 +1965,9 @@ export function processTraceData(
         traceTask.subTasks.unshift(actionGroupSubtask);
       }
     }
-    
-    newState.messages.push(traceGroup);
+  }
+  
+  newState.messages.push(traceGroup);
   }
   
   return newState;

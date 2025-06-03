@@ -6,29 +6,24 @@ import Header from "@cloudscape-design/components/header";
 import ExpandableSection from "@cloudscape-design/components/expandable-section";
 import KeyValuePairs from "@cloudscape-design/components/key-value-pairs";
 import Badge from "@cloudscape-design/components/badge";
-
-interface Message {
-  id: string;
-  type: string;
-  content: React.ReactNode;
-  timestamp: string;
-}
-
-interface MessagePair {
-  user: Message;
-  assistant: Message;
-  date: string;
-  time: string;
-}
+import Button from "@cloudscape-design/components/button";
+import { Spinner, Alert } from "@cloudscape-design/components";
+import { MessagePair } from "./chatHistoryService";
 
 interface MessageHistoryDrawerProps {
   messagePairs: MessagePair[];
   visible?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  onRefresh?: () => void;
 }
 
 const MessageHistoryDrawer: React.FC<MessageHistoryDrawerProps> = ({ 
   messagePairs,
-  visible = false
+  visible = false,
+  loading = false,
+  error = null,
+  onRefresh
 }) => {
   // Only render the drawer if it's visible
   if (!visible) return null;
@@ -47,49 +42,93 @@ const MessageHistoryDrawer: React.FC<MessageHistoryDrawerProps> = ({
     }}>
       <Drawer header={
         <Header variant="h2" 
-          description="Recent conversation history" 
-          actions={<Badge color="blue">{messagePairs.length} conversations</Badge>}
+          description="Last 10 conversations" 
+          actions={
+            <SpaceBetween size="xs" direction="horizontal">
+              <Badge color="blue">{messagePairs.length} conversations</Badge>
+              {onRefresh && (
+                <Button 
+                  iconName="refresh" 
+                  variant="icon" 
+                  onClick={onRefresh} 
+                  disabled={loading}
+                  ariaLabel="Refresh chat history"
+                />
+              )}
+            </SpaceBetween>
+          }
         >
           Message History
         </Header>
       }>
         <Box margin={{ bottom: "l" }}>
-          <SpaceBetween size="xl">
-            {messagePairs.map((pair, index) => (
-              <SpaceBetween key={`pair-${index}`} size="xs">
-                <Header variant="h3">
-                  {pair.date} - {pair.time}
-                </Header>
-                <ExpandableSection
-                  headerText="Conversation"
-                  defaultExpanded={index === 0}
-                >
-                  <KeyValuePairs
-                    columns={1}
-                    items={[
-                      { 
-                        label: "You", 
-                        value: typeof pair.user.content === "string" 
-                          ? pair.user.content 
-                          : "Content not available" 
-                      },
-                      {
-                        label: "Assistant",
-                        value: typeof pair.assistant.content === "string" 
-                          ? pair.assistant.content 
-                          : "Content not available"
-                      }
-                    ]}
-                  />
-                </ExpandableSection>
-              </SpaceBetween>
-            ))}
-            {messagePairs.length === 0 && (
-              <Box color="text-status-inactive" textAlign="center" padding="m">
-                No conversation history yet
+          {loading ? (
+            <Box textAlign="center" padding="l">
+              <Spinner size="large" />
+              <Box variant="p" padding={{ top: "s" }}>
+                Loading chat history from DynamoDB...
               </Box>
-            )}
-          </SpaceBetween>
+            </Box>
+          ) : error ? (
+            <Box padding="m">
+              <Alert
+                type="error"
+                header="Error loading chat history"
+                action={onRefresh ? "Retry" : undefined}
+                onDismiss={onRefresh}
+              >
+                {error}
+              </Alert>
+            </Box>
+          ) : (
+            <SpaceBetween size="xl">
+              {messagePairs.map((pair, index) => (
+                <SpaceBetween key={`pair-${index}`} size="xs">
+                  <Header variant="h3">
+                    {pair.date} - {pair.time}
+                  </Header>
+                  <ExpandableSection
+                    headerText="Conversation"
+                    defaultExpanded={index === 0}
+                  >
+                    <KeyValuePairs
+                      columns={1}
+                      items={[
+                        { 
+                          label: "You", 
+                          value: typeof pair.user.content === "string" 
+                            ? pair.user.content 
+                            : "Content not available" 
+                        },
+                        {
+                          label: "Assistant",
+                          value: typeof pair.assistant.content === "string" 
+                            ? pair.assistant.content 
+                            : "Content not available"
+                        }
+                      ]}
+                    />
+                  </ExpandableSection>
+                </SpaceBetween>
+              ))}
+              {messagePairs.length === 0 && !loading && !error && (
+              <Box color="text-status-inactive" textAlign="center" padding="m">
+                <SpaceBetween size="s">
+                  <div>No conversation history found</div>
+                  {onRefresh && (
+                    <Button 
+                      onClick={onRefresh} 
+                      iconName="refresh"
+                      disabled={loading}
+                    >
+                      Refresh History
+                    </Button>
+                  )}
+                </SpaceBetween>
+              </Box>
+              )}
+            </SpaceBetween>
+          )}
         </Box>
       </Drawer>
     </div>

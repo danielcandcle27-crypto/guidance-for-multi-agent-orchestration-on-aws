@@ -27,6 +27,7 @@ interface TroubleshootSubAgentProps {
 
 export class TroubleshootSubAgent extends Construct {
     public readonly agentCollaborator: AgentCollaborator;
+    public readonly knowledgeBaseId: string;
 
     constructor(scope: Construct, id: string, props: TroubleshootSubAgentProps) {
         super(scope, id);
@@ -119,7 +120,7 @@ export class TroubleshootSubAgent extends Construct {
             checkIntervalHours: 24
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_SONNET_V1_0;
+        const model = BedrockFoundationModel.AMAZON_NOVA_LITE_V1;
 
         const troubleshootInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,
@@ -159,11 +160,12 @@ export class TroubleshootSubAgent extends Construct {
 
         const troubleshootAgentCollaborator = new AgentCollaborator({
             agentAlias: troubleshootAgentAlias,
-            collaborationInstruction: "Route troubleshoot questions to this agent.",
+            collaborationInstruction: "Expert in technical support, problem resolution, and answers to frequently asked questions for products and services.",
             collaboratorName: "Troubleshoot",
             relayConversationHistory: true,
         });
 
         this.agentCollaborator = troubleshootAgentCollaborator;
+        this.knowledgeBaseId = troubleshootKnowledgeBase.knowledgeBaseId;
     }
 }

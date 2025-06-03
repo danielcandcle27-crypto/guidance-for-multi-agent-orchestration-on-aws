@@ -16,9 +16,120 @@ import {
   resetChatSession
 } from './killSwitch';
 
+/**
+ * Utility function to clean up localStorage items related to message tracking
+ * This helps prevent QuotaExceededError by removing old message data before storing new ones
+ * @returns The number of items cleaned up
+ */
+export const cleanupLocalStorageMessages = (preserveRecent: boolean = true): number => {
+  console.log('🧹 Starting localStorage message cleanup');
+  
+  // Track how many items we clean up
+  let cleanupCount = 0;
+  
+  // Check if any message is currently being processed by the Supervisor agent
+  const isSupervisorProcessing = document.querySelector('.node-processing[id="supervisor-agent"]') !== null;
+  
+  // First backup any important content that might be needed for recovery
+  // This is reduced compared to full backups in resetChatSession to avoid storage bloat
+  try {
+    // Create a single compact backup of recent complete messages
+    const recentKeys: string[] = [];
+    const recentData: Record<string, string> = {};
+    
+    // Find the 3 most recent complete message keys (based on timestamp in key)
+    const messageKeys: {key: string, timestamp: number}[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('complete_message_')) {
+        // Extract timestamp from key (complete_message_TIMESTAMP)
+        const timestampStr = key.split('_').pop();
+        if (timestampStr) {
+          const timestamp = parseInt(timestampStr);
+          if (!isNaN(timestamp)) {
+            messageKeys.push({ key, timestamp });
+          }
+        }
+      }
+    }
+    
+    // Sort by timestamp (descending) and keep only most recent 3
+    messageKeys.sort((a, b) => b.timestamp - a.timestamp);
+    const recentMessageKeys = messageKeys.slice(0, 3);
+    
+    // Store these in our backup
+    for (const { key } of recentMessageKeys) {
+      const value = localStorage.getItem(key);
+      if (value) {
+        recentData[key] = value;
+        recentKeys.push(key);
+      }
+    }
+    
+    // Only create backup if we have messages to back up
+    if (recentKeys.length > 0) {
+      const backupKey = `message_backup_mini_${Date.now()}`;
+      localStorage.setItem(backupKey, JSON.stringify(recentData));
+      console.log(`💾 Created mini-backup of ${recentKeys.length} recent messages with key: ${backupKey}`);
+    }
+  } catch (e) {
+    console.error('Error creating message mini-backup during cleanup:', e);
+  }
+  
+  // Now find and remove all complete_message items, with special handling
+  const messagesToClear = [];
+  const supervisorMessages = [];
+  const recentMessages = [];
+  
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    // Target only complete_message keys but preserve backups
+    if (key && key.startsWith('complete_message_')) {
+      // Keep track of supervisor messages separately
+      const value = localStorage.getItem(key);
+      if (value && 
+          (value.includes('Supervisor final response') || 
+           value.includes('Final Response') && value.includes("Can I help you with anything else?"))) {
+        supervisorMessages.push(key);
+        console.log('🔒 Preserving supervisor final message:', key);
+      } else if (preserveRecent && key.includes(Date.now().toString().substring(0, 8))) {
+        // This is a very recent message (from today), keep it
+        recentMessages.push(key);
+        console.log('🔒 Preserving recent message:', key);
+      } else {
+        messagesToClear.push(key);
+      }
+    }
+  }
+  
+  // Remove only the non-supervisor, non-recent messages
+  messagesToClear.forEach(key => {
+    localStorage.removeItem(key);
+    cleanupCount++;
+  });
+  
+  console.log(`🧹 Cleaned up ${cleanupCount} message entries from localStorage`);
+  return cleanupCount;
+};
+
 // Helper function to determine if a text or trace data indicates a final response
 export const isFinalResponseContent = (content: string, traceData?: any): boolean => {
-  // First use the comprehensive detection from finalMessageKillSwitch
+  // Check for Supervisor related trace indicators first (most reliable)
+  if (traceData) {
+    // Explicit supervisor final response flag
+    if (traceData.isSupervisorFinalResponse === true) {
+      return true;
+    }
+    
+    // Check if this is a trace with originalAgentType of Supervisor and has a Final Response task
+    if (traceData.originalAgentType === 'Supervisor' && 
+        traceData.tasks && 
+        traceData.tasks.some((t: any) => t.title === 'Final Response')) {
+      return true;
+    }
+  }
+  
+  // Use the comprehensive detection from finalMessageKillSwitch as fallback
   if (isFinalMessage(traceData, content)) {
     return true;
   }
@@ -33,7 +144,8 @@ export const isFinalResponseContent = (content: string, traceData?: any): boolea
       "To summarize",
       "I hope this helps",
       "Please let me know if you have any questions",
-      "Please let me know if you need any clarification"
+      "Please let me know if you need any clarification",
+      "Final Response" // Explicitly check for "Final Response" text
     ];
     
     // Product-specific patterns
@@ -164,6 +276,7 @@ interface FinalMessageStreamingProps {
   onAnimationStart?: () => void;
   onAnimationComplete?: (isDone: boolean) => void;
   messageId?: string;
+  traceData?: any; // Add traceData parameter for final response detection
 }
 
 // Debug console log for animation state
@@ -173,30 +286,182 @@ const debugAnimationState = (id: string, status: string) => {
 
 // Use memo with custom equality function to prevent unnecessary re-renders
 export const FinalMessageStreaming = React.memo(
-  ({ content, onAnimationStart, onAnimationComplete, messageId }: FinalMessageStreamingProps) => {
+  ({ content, onAnimationStart, onAnimationComplete, messageId, traceData }: FinalMessageStreamingProps) => {
+    // Clean up localStorage on component initialization
+    useEffect(() => {
+      // Clean up localStorage when component mounts (happens on page refresh too)
+      console.log('🧹 FinalMessageStreaming component initialized, cleaning up localStorage');
+      cleanupLocalStorageMessages();
+      
+      // Set up listener for new message submissions to clean localStorage before sending
+      const handleNewMessageSubmit = () => {
+        console.log('🧹 New message being submitted, cleaning up localStorage');
+        cleanupLocalStorageMessages();
+      };
+      
+      // Listen for new message submission events
+      document.addEventListener('newMessageSubmission', handleNewMessageSubmit);
+      
+      return () => {
+        document.removeEventListener('newMessageSubmission', handleNewMessageSubmit);
+      };
+    }, []);
+
     // Calculate initial state values
     const isGreeting = content === "Hello, how can I assist you?";
     const isFinal = content && typeof content === 'string' && isFinalResponseContent(content);
     
-  // For final messages and product recommendations, skip animation entirely
-  // Set the initial state based on whether this is a final message
-  const shouldSkipAnimation = isGreeting || isFinal;
-  const initialContent = shouldSkipAnimation ? content : '';
-  const initialHtml = shouldSkipAnimation ? parseMarkdown(content) : '';
+  // For initial message, skip animation for greetings entirely
+  // For subsequent messages, always start with empty content to allow animation
+  const shouldSkipInitialAnimation = isGreeting;
+  const initialContent = shouldSkipInitialAnimation ? content : '';
+  const initialHtml = shouldSkipInitialAnimation ? parseMarkdown(content) : '';
   
-  // Set states with immediate content for final messages
+  // Set states with immediate content for greeting, empty for everything else to force animation
   const [displayedText, setDisplayedText] = useState(initialContent);
   const [processedHtml, setProcessedHtml] = useState(initialHtml);
-  // Start with isDone true for final messages and greetings
-  const [isDone, setIsDone] = useState(shouldSkipAnimation);
+  // Start with isDone true only for greetings
+  const [isDone, setIsDone] = useState(shouldSkipInitialAnimation);
 
     // Debug component initialization
     console.log(`Component initialized: msgId=${messageId}, content=${!!content}(${content?.length || 0}), html=${!!processedHtml}, isDone=${isDone}`);
 
-    // Modified effect to support streaming behavior with localStorage backup
+    // Add event listener for Supervisor and other agent Final Response events
+  useEffect(() => {
+    const handleSupervisorFinalResponse = (e: Event) => {
+      const event = e as CustomEvent;
+      const content = event.detail?.content;
+      const detectionTime = event.detail?.detectionTime || Date.now();
+      const receivedTime = Date.now();
+      
+      if (content && typeof content === 'string') {
+        console.log(`⏱️ [${receivedTime}] TIMING: finalMessageStreaming received supervisorFinalResponse event (delay: ${receivedTime - detectionTime}ms), content length: ${content.length}`);
+        
+        // Update the content reference to ensure it gets rendered
+        fullContentRef.current = content;
+        
+        // If this message matches our component's messageId, render it immediately
+        if (messageId === event.detail?.traceId || !messageId) {
+          console.log(`⏱️ [${receivedTime}] TIMING: Supervisor final response matches this component, initiating immediate render`);
+          
+          // Clear any existing streaming timer
+          clearStreamTimer();
+          
+          // For faster rendering, use more initial characters
+          const initialChars = Math.min(content.length, 30); // Increased from 15 to 30
+          setDisplayedText(content.substring(0, initialChars));
+          setProcessedHtml(parseMarkdown(content.substring(0, initialChars)));
+          setIsDone(false); // Ensure animation runs
+          
+          // Clean up localStorage first, then store the new message
+          if (messageId) {
+            // Clean up before saving but preserve recent and important messages
+            cleanupLocalStorageMessages(true);
+            // Ensure supervisor final messages are always saved
+            localStorage.setItem(`complete_message_${messageId}`, content);
+            console.log(`💾 Backup saved for Supervisor final message ${messageId}`);
+          }
+          
+          // Mark as final for proper handling
+          hasFinalResponseRef.current = true;
+          
+          // Force update with very short delay to ensure immediate visibility
+          setTimeout(() => {
+            const renderTime = Date.now();
+            console.log(`⏱️ [${renderTime}] TIMING: Force updating full content for fast render (total delay: ${renderTime - detectionTime}ms)`);
+            
+            // Set displayed text to a larger chunk of content to speed up initial rendering
+            const largerChunk = Math.min(content.length, content.length / 2);
+            setDisplayedText(content.substring(0, largerChunk));
+            setProcessedHtml(parseMarkdown(content.substring(0, largerChunk)));
+          }, 10);
+        }
+      }
+    };
+    
+    // Handler for other agent final responses
+    const handleAgentFinalResponse = (e: Event) => {
+      const event = e as CustomEvent;
+      const content = event.detail?.content;
+      const agentName = event.detail?.agentName || 'Unknown';
+      const detectionTime = event.detail?.detectionTime || Date.now();
+      const receivedTime = Date.now();
+      
+      if (content && typeof content === 'string') {
+        console.log(`⏱️ [${receivedTime}] TIMING: finalMessageStreaming received ${agentName} final response event (delay: ${receivedTime - detectionTime}ms), content length: ${content.length}`);
+        
+        // Update the content reference to ensure it gets rendered
+        fullContentRef.current = content;
+        
+        // If this message matches our component's messageId, render it immediately
+        if (messageId === event.detail?.traceId || !messageId) {
+          console.log(`⏱️ [${receivedTime}] TIMING: ${agentName} final response matches this component, initiating immediate render`);
+          
+          // Clear any existing streaming timer
+          clearStreamTimer();
+          
+          // For faster rendering, use more initial characters
+          const initialChars = Math.min(content.length, 30);
+          setDisplayedText(content.substring(0, initialChars));
+          setProcessedHtml(parseMarkdown(content.substring(0, initialChars)));
+          setIsDone(false); // Ensure animation runs
+          
+          // Clean up localStorage first, then store the new message
+          if (messageId) {
+            // Clean up before saving, preserving recent and important messages
+            cleanupLocalStorageMessages(true);
+            localStorage.setItem(`complete_message_${messageId}`, content);
+          }
+          
+          // Mark as final for proper handling
+          hasFinalResponseRef.current = true;
+          
+          // Force update with very short delay
+          setTimeout(() => {
+            const renderTime = Date.now();
+            console.log(`⏱️ [${renderTime}] TIMING: Force updating full content for ${agentName} (total delay: ${renderTime - detectionTime}ms)`);
+            
+            // Set displayed text to a larger chunk of content to speed up initial rendering
+            const largerChunk = Math.min(content.length, content.length / 2);
+            setDisplayedText(content.substring(0, largerChunk));
+            setProcessedHtml(parseMarkdown(content.substring(0, largerChunk)));
+          }, 10);
+        }
+      }
+    };
+    
+    document.addEventListener('supervisorFinalResponse', handleSupervisorFinalResponse);
+    document.addEventListener('supervisorFinalResponseRendered', handleSupervisorFinalResponse);
+    document.addEventListener('agentFinalResponseRendered', handleAgentFinalResponse);
+    
+    return () => {
+      document.removeEventListener('supervisorFinalResponse', handleSupervisorFinalResponse);
+      document.removeEventListener('supervisorFinalResponseRendered', handleSupervisorFinalResponse);
+      document.removeEventListener('agentFinalResponseRendered', handleAgentFinalResponse);
+    };
+  }, [messageId]);
+
+  // Modified effect to support streaming behavior with localStorage backup - with reset for each new message
     useEffect(() => {
       if (content) {
         console.log(`Content change detected (${content.length} chars), msgId=${messageId}`);
+        
+        // Detect if this is a completely new message (different messageId)
+        if (messageId !== prevMessageIdRef.current) {
+          console.log(`New message detected (previous: ${prevMessageIdRef.current}, current: ${messageId})`);
+          prevMessageIdRef.current = messageId;
+          
+          // Always reset state for new messages to ensure animation happens
+          if (!isGreeting) {
+            console.log(`Resetting state for new message ${messageId}`);
+            setDisplayedText('');
+            setProcessedHtml('');
+            setIsDone(false);
+            // Reset other internal state
+            initialRenderRef.current = true;
+            hasFinalResponseRef.current = false;
+          }
+        }
         
         // First check if we have a complete message saved in localStorage for this message ID
         let completeContent = content;
@@ -212,12 +477,11 @@ export const FinalMessageStreaming = React.memo(
         // Store the complete content reference
         fullContentRef.current = completeContent;
         
-        // Only set full content immediately for greetings and final messages
-        // This allows other messages to stream properly
-        const isGreeting = completeContent === "Hello, how can I assist you?";
-        const isFinal = completeContent && typeof completeContent === 'string' && isFinalResponseContent(completeContent);
+        // Only set full content immediately for greetings
+        // This allows all other messages to stream properly
+        const isGreetingMessage = completeContent === "Hello, how can I assist you?";
         
-        if (isGreeting) {
+        if (isGreetingMessage) {
           console.log(`Immediate display for greeting: ${isGreeting ? 'greeting' : 'final'}`);
           setDisplayedText(completeContent);
           const html = parseMarkdown(completeContent);
@@ -259,6 +523,7 @@ export const FinalMessageStreaming = React.memo(
     const responseIdRef = useRef(`response-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
     const initialRenderRef = useRef(true);
     const hasFinalResponseRef = useRef(isGreeting);
+    const prevMessageIdRef = useRef<string | undefined>(messageId);
     
     // Reference to track if we should allow interruption
     const allowInterruptRef = useRef(true);
@@ -392,16 +657,131 @@ export const FinalMessageStreaming = React.memo(
       };
     }, [onAnimationComplete, displayedText.length, isDone, messageId]);
     
-    // Effect to lock animation protection when the final message phrases are detected
-    useEffect(() => {
-      // Check if this contains final message phrases
-      const hasFinalPhrases = isFinalResponseContent(fullContentRef.current);
+  // Effect to lock animation protection when the final message phrases are detected
+  // and force completion for final messages to ensure they don't stay in loading state
+  // ENHANCED with multiple fail-safe mechanisms and special handling for OrderManagement agent
+  useEffect(() => {
+    // Multiple detection paths to ensure final messages are properly handled
+    const hasFinalPhrases = isFinalResponseContent(fullContentRef.current);
+    const isStaticContent = fullContentRef.current === displayedText && fullContentRef.current.length > 0;
+    const isFinalByMetadata = traceData?.hasFinalResponse || traceData?.isSupervisorFinalResponse;
+    
+    // Check if this is OrderManagement or other special agent
+    const isOrderManagement = 
+      traceData?.originalAgentType === 'OrderManagement' || 
+      (traceData?.agentId && (traceData.agentId.includes('order') || traceData.agentId.includes('management')));
+    
+    // Combined check using multiple detection methods for robustness
+    const isFinalMessage = hasFinalPhrases || isFinalByMetadata || 
+                          (isStaticContent && fullContentRef.current.length > 100);
+    
+    if (isFinalMessage) {
+      console.log('🔒 Final message detected, activating animation lock for protection');
+      console.log(`Detection sources: phrases=${hasFinalPhrases}, metadata=${isFinalByMetadata}, static=${isStaticContent}, isOrderManagement=${isOrderManagement}`);
       
-      if (hasFinalPhrases) {
-        console.log('🔒 Final message detected, activating animation lock for protection');
-        allowInterruptRef.current = false;
+      allowInterruptRef.current = false;
+      
+      // For final messages, force completion after a shorter delay if not already complete
+      if (!isDone) {
+        console.log('🔄 Final message not yet complete, scheduling force-completion');
+        
+        // Use extremely short timeout for OrderManagement and Supervisor agents to reduce delay
+        // This is a critical fix for the observed slowness with final responses
+        const isSupervisor = 
+          traceData?.originalAgentType === 'Supervisor' || 
+          (traceData?.agentId && (traceData.agentId.includes('supervisor') || 
+                                 traceData.agentId.includes('super')));
+          
+        // Use the shortest possible delay for these critical agents
+        const completionDelay = isOrderManagement ? 200 : // OrderManagement even faster
+                              isSupervisor ? 100 : // Supervisor gets fastest response
+                              500; // Other agents still faster than before
+        
+        // Primary completion timer - shorter timeout (1 second or 0.5 seconds for OrderManagement)
+        const completeTimer = setTimeout(() => {
+          // Only force complete if we're still not done
+          if (!isDone) {
+            console.log(`⚡ Forcing completion of final message - primary timer (${isOrderManagement ? 'OrderManagement agent' : 'regular agent'})`);
+            setDisplayedText(fullContentRef.current);
+            setProcessedHtml(parseMarkdown(fullContentRef.current));
+            setIsDone(true);
+            
+            // Notify parent of completion
+            if (onAnimationComplete) {
+              onAnimationComplete(true);
+            }
+            
+            // Clear loading state globally and report completion
+            document.dispatchEvent(new Event('forceCompleteTextContent'));
+            document.dispatchEvent(new CustomEvent('finalMessageForceCompleted', {
+              detail: { 
+                content: fullContentRef.current,
+                messageId,
+                timestamp: Date.now(),
+                isOrderManagement
+              }
+            }));
+          }
+        }, completionDelay);
+        
+        // Backup safety timer (5 seconds) - this is our final fail-safe
+        const safetyTimer = setTimeout(() => {
+          if (!isDone) {
+            console.log('🚨 SAFETY TIMER: Force completing final message after extended timeout');
+            setDisplayedText(fullContentRef.current);
+            setProcessedHtml(parseMarkdown(fullContentRef.current));
+            setIsDone(true);
+            
+            // Force global state cleanup with stronger event
+            document.dispatchEvent(new Event('globalKillAllAnimations'));
+            
+            if (onAnimationComplete) {
+              onAnimationComplete(true);
+            }
+          }
+        }, 5000);
+        
+        // Verification timer to check if events were processed (2 seconds)
+        const verificationTimer = setTimeout(() => {
+          // Check if message is still showing as processing
+          if (!isDone && document.dispatchEvent) {
+            console.log('🔍 Verifying final message processing status');
+            
+            // Dispatch verification event which will trigger backup handlers
+            document.dispatchEvent(new CustomEvent('verifyFinalMessageProcessing', {
+              detail: { 
+                messageId, 
+                timestamp: Date.now(),
+                content: fullContentRef.current 
+              }
+            }));
+          }
+        }, 2000);
+        
+        // Log diagnostics for debugging
+        console.log(`🔍 [${Date.now()}] Final message status - 
+          id: ${messageId}
+          content length: ${fullContentRef.current?.length || 0}
+          display length: ${displayedText?.length || 0}
+          isDone: ${isDone}
+          processing complete: ${isProcessingComplete()}
+        `);
+        
+        // Track the timers for cleanup
+        if (window.__activeTimers) {
+          window.__activeTimers.push(completeTimer);
+          window.__activeTimers.push(safetyTimer);
+          window.__activeTimers.push(verificationTimer);
+        }
+        
+        return () => {
+          clearTimeout(completeTimer);
+          clearTimeout(safetyTimer);
+          clearTimeout(verificationTimer);
+        };
       }
-    }, [fullContentRef.current]);
+    }
+  }, [fullContentRef.current, isDone, onAnimationComplete, messageId, traceData]);
     
     // Track when we have final response content but allow it to stream
     useEffect(() => {
@@ -417,6 +797,8 @@ export const FinalMessageStreaming = React.memo(
           
           // Create a backup in localStorage for final messages
           if (messageId) {
+            // Clean up before saving, preserving recent and important messages
+            cleanupLocalStorageMessages(true);
             localStorage.setItem(`complete_message_${messageId}`, content);
             console.log(`💾 Backup saved for final message ${messageId}`);
           }
@@ -558,19 +940,20 @@ export const FinalMessageStreaming = React.memo(
       clearStreamTimer(); // Clear any existing timer
       
       // For better streaming performance, increment by a larger amount for longer messages
-      const baseCharsPerTick = 5;
-      const additionalCharsPerTick = Math.floor(fullContentRef.current.length / 500);
+      // Significantly increase base chars per tick for faster animation
+      const baseCharsPerTick = 15;  // Increased from 5 to 15
+      const additionalCharsPerTick = Math.floor(fullContentRef.current.length / 300);  // Reduced divisor to add more chars per tick
       const charsPerTick = baseCharsPerTick + additionalCharsPerTick;
       
       // Use a more adaptive timer duration for smoother streaming
-      // Shorter for small content, slightly longer for large content
-      const baseTimerDuration = 12;
+      // Greatly reduce timer duration for faster text rendering
+      const baseTimerDuration = 5;  // Reduced from 12 to 5
       const contentLength = fullContentRef.current.length;
       
       // Adjust timing based on content length with a maximum duration
       const timerDuration = Math.min(
-        baseTimerDuration + Math.floor(contentLength / 5000),
-        20 // Maximum timer duration
+        baseTimerDuration + Math.floor(contentLength / 10000),
+        10  // Reduced maximum timer duration from 20 to 10
       );
       
       // Create a stable timer ID to prevent duplicate timers
@@ -586,11 +969,11 @@ export const FinalMessageStreaming = React.memo(
       
       // Define a recursive streaming function that continues until text is fully displayed
       const streamNextChunk = () => {
-        // First check if we've reached the end of content or the streaming should complete
-        if (displayedText.length >= fullContentRef.current.length || 
-           (isFinalResponseContent(fullContentRef.current) && displayedText.length > fullContentRef.current.length * 0.7)) {
+        // ALWAYS check if we've reached the end of content - NEVER stop early based on final message detection
+        // This ensures animations always complete to 100%
+        if (displayedText.length >= fullContentRef.current.length) {
           
-          console.log(`Streaming complete - reached end of content or detected final message`);
+          console.log(`Streaming complete - reached 100% of content`);
           
           // Always make sure we show the entire content
           setDisplayedText(fullContentRef.current);
@@ -611,11 +994,48 @@ export const FinalMessageStreaming = React.memo(
           return;
         }
         
-        // Add a constant but random number of characters each time for a more natural effect
-        // Using a consistent algorithm reduces render jitter
-        const charsToAdd = Math.floor(Math.random() * 4) + charsPerTick;
+        // Calculate number of characters to add, with adjustments for final responses to speed up rendering
+        let charsToAdd = charsPerTick;
+        
+        // If this is a final response, add more characters per tick the longer it gets to accelerate rendering
+        if (hasFinalResponseRef.current || isFinalResponseContent(fullContentRef.current)) {
+          // Add bonus characters for final responses (scaled to length)
+          const bonusChars = Math.floor(fullContentRef.current.length / 200);
+          // Increase characters added as the animation progresses to accelerate toward the end
+          const progressBonus = Math.floor((displayedText.length / fullContentRef.current.length) * 20);
+          
+          // Add both bonuses to the base character count
+          charsToAdd = charsPerTick + bonusChars + progressBonus;
+          
+          // For very long final responses, add even more characters per tick to finish quickly
+          if (fullContentRef.current.length > 500) {
+            charsToAdd += Math.floor(fullContentRef.current.length / 100);
+          }
+        } else {
+          // For non-final responses, just add a small random factor
+          charsToAdd += Math.floor(Math.random() * 4);
+        }
+        
         const nextTextLength = Math.min(displayedText.length + charsToAdd, fullContentRef.current.length);
         const nextText = fullContentRef.current.substring(0, nextTextLength);
+        
+        // For long final responses, check if we're near the end and jump to completion
+        if ((hasFinalResponseRef.current || isFinalResponseContent(fullContentRef.current)) &&
+            fullContentRef.current.length > 300 &&
+            nextTextLength > fullContentRef.current.length * 0.8) {
+          // If we've shown 80% of a long final response, complete it immediately
+          console.log(`Final response is >80% complete (${nextTextLength}/${fullContentRef.current.length}) - accelerating to completion`);
+          return streamTimerRef.current = safeSetTimeout(() => {
+            setDisplayedText(fullContentRef.current);
+            setProcessedHtml(parseMarkdown(fullContentRef.current));
+            setIsDone(true);
+            
+            // Notify parent of completion
+            if (onAnimationComplete) {
+              onAnimationComplete(true);
+            }
+          }, 100);
+        }
         
         // For final messages, continue streaming until completion rather than jumping ahead
         // This ensures the full character-by-character animation plays out
@@ -727,13 +1147,14 @@ export const FinalMessageStreaming = React.memo(
             // PHASE 1: Dispatch final message detected event
             dispatchFinalMessageDetected(fullContentRef.current);
             
-            // PHASE 2: Schedule final rendered event with small delay for proper sequencing
-            safeSetTimeout(() => {
-              if (fullContentRef.current === content) {
-                console.log('🏁 Final message animation complete, dispatching final rendered event');
-                dispatchFinalMessageRendered(fullContentRef.current);
-              }
-            }, 200);
+        // PHASE 2: Schedule final rendered event with minimal delay for proper sequencing
+        // Use Promise.resolve for microtask queue execution (faster than setTimeout)
+        Promise.resolve().then(() => {
+          if (fullContentRef.current === content) {
+            console.log('🏁 Final message animation complete, dispatching final rendered event');
+            dispatchFinalMessageRendered(fullContentRef.current);
+          }
+        });
           }
           
           // Update browser node with final content
@@ -915,97 +1336,21 @@ export const FinalMessageStreaming = React.memo(
       </div>
     );
   },
-  // Enhanced custom equality function to ensure proper streaming behavior
+  // Greatly simplified equality function to ensure complete message rendering
   (prevProps, nextProps) => {
-    // Check if next props contain more content than previous
-    const nextLonger = (nextProps.content?.length || 0) > (prevProps.content?.length || 0);
-    
-    // Check for final message indicators in either current or new content
-    const nextContentHasFinalMarkers = isFinalResponseContent(nextProps.content);
-    const prevContentHasFinalMarkers = isFinalResponseContent(prevProps.content);
-    
-    // If the new content contains final markers but the old didn't, always re-render
-    if (nextContentHasFinalMarkers && !prevContentHasFinalMarkers) {
-      console.log("Final message detected in equality check, forcing render");
-      return false; // Force re-render
+    // For improved reliability, ALWAYS re-render when content changes
+    if (prevProps.content !== nextProps.content) {
+      console.log("Content changed, forcing render");
+      return false; // Content changed, force re-render
     }
     
-    // Always check for phrases that might indicate a final response
-    if (nextProps.content) {
-      const finalPhrases = [
-        "Can I help you with anything else?",
-        "Is there anything else",
-        "In conclusion",
-        "To summarize",
-        "I hope this helps",
-        "Let me know if you have any questions"
-      ];
-      
-      // Product-specific phrases that should trigger re-rendering
-      const productSpecificPhrases = [
-        "Recommended Products:",
-        "Troubleshooting Tips:",
-        "ThunderBolt Speaker",
-        "SonicWave Bluetooth Speaker"
-      ];
-      
-      // Check for product-specific phrases in next content
-      const hasProductPattern = productSpecificPhrases.some(phrase => 
-        nextProps.content.includes(phrase)
-      );
-      
-      // Force re-render for products even if length difference is small
-      if (hasProductPattern) {
-        console.log("Product-related content detected in memo check, forcing render");
-        return false; // Force re-render
-      }
-      
-      // If any of these phrases appear in the new content but weren't in the old, force render
-      for (const phrase of finalPhrases) {
-        if (nextProps.content.includes(phrase) && (!prevProps.content || !prevProps.content.includes(phrase))) {
-          console.log(`Final phrase "${phrase}" detected, forcing render`);
-          return false; // Force re-render
-        }
-      }
-    }
-    
-    // Always allow renders for new messages (first time appearing)
-    if (!prevProps.messageId && nextProps.messageId) {
-      console.log("New message with ID detected, forcing render");
-      return false;
-    }
-    
-    // Always render if message IDs are different
+    // Check if message IDs are different - always re-render for new messages
     if (prevProps.messageId !== nextProps.messageId) {
       console.log("Message ID changed, forcing render");
-      return false;
+      return false; // Message ID changed, force re-render
     }
     
-    // If contents are identical, we can skip rendering
-    if (prevProps.content === nextProps.content) {
-      return true;
-    }
-    
-    // For updates that make the content longer, be more aggressive about re-rendering
-    if (nextLonger) {
-      const lengthDiff = (nextProps.content?.length || 0) - (prevProps.content?.length || 0);
-      // More frequent updates for growing content
-      if (lengthDiff > 5) {
-        console.log(`Content grew by ${lengthDiff} chars, allowing re-render`);
-        return false; 
-      }
-    }
-    
-    // For non-final responses, check content length difference
-    const lengthDiff = Math.abs((prevProps.content?.length || 0) - (nextProps.content?.length || 0));
-    
-    // Always render if it's a significant change
-    if (lengthDiff > 8) { // Lower threshold further to ensure more updates
-      console.log(`Significant change in content length: ${lengthDiff}, allowing re-render`);
-      return false;
-    }
-    
-    // Default case - still allow re-renders more often
-    return lengthDiff < 2; // Only skip tiny updates (lower threshold)
+    // Only skip re-renders if props are completely identical
+    return true;
   }
 );

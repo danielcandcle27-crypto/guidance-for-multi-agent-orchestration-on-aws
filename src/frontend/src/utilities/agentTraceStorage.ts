@@ -27,6 +27,18 @@ interface AgentTraceCache {
 const TRACE_STORAGE_KEY = 'agent-trace-cache';
 const SESSION_TRACE_KEY = 'current-session-traces';
 
+// Constants for storage management
+const MAX_TRACE_AGE_MS = 10 * 60 * 1000; // 10 minutes
+const CLEANUP_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+const IDLE_CLEANUP_THRESHOLD_MS = 30 * 1000; // 30 seconds
+const ESTIMATED_MAX_STORAGE_BYTES = 4 * 1024 * 1024; // ~4MB safe limit
+const CLEANUP_QUOTA_THRESHOLD = 0.8; // Clean when at 80% of quota
+
+// Track last cleanup time to prevent too frequent cleanups
+let lastCleanupTime = 0;
+// Flag to track if trace cleanup is in progress to prevent recursive calls
+let cleanupInProgress = false;
+
 /**
  * Initialize the agent trace storage, clearing existing data on page load/reload
  */
@@ -38,7 +50,79 @@ export const initAgentTraceStorage = (): void => {
   // Reset the in-memory cache
   window.__agentTraceCache = {};
   
+  // Initialize cleanup timers
+  setupPeriodicCleanup();
+  
   console.log('🧹 Agent trace storage cleared on page load/reload');
+};
+
+/**
+ * Set up periodic cleanup of trace data to prevent quota issues
+ */
+const setupPeriodicCleanup = (): void => {
+  // Don't set up multiple cleanup timers
+  if (window.__traceCleanupTimerActive) {
+    return;
+  }
+
+  // Set a cleanup timer that runs periodically
+  const timer = setInterval(() => {
+    // Only run cleanup if not already in progress
+    if (!cleanupInProgress) {
+      cleanupOldTraces();
+    }
+  }, CLEANUP_INTERVAL_MS);
+  
+  // Mark cleanup as active and store timer reference for cleanup
+  window.__traceCleanupTimerActive = true;
+  window.__traceCleanupTimer = timer;
+  
+  // Clean up the timer when the window is closed/refreshed
+  window.addEventListener('beforeunload', () => {
+    if (window.__traceCleanupTimer) {
+      clearInterval(window.__traceCleanupTimer);
+      window.__traceCleanupTimerActive = false;
+    }
+  });
+
+  // Also set up idle time detection for cleanup
+  setupIdleCleanup();
+};
+
+/**
+ * Set up cleanup during user idle time
+ */
+const setupIdleCleanup = (): void => {
+  // Track user activity
+  let lastActivityTime = Date.now();
+  const trackActivity = () => {
+    lastActivityTime = Date.now();
+  };
+  
+  // Add basic activity listeners
+  ['mousemove', 'keypress', 'scroll', 'click'].forEach(eventName => {
+    window.addEventListener(eventName, trackActivity, { passive: true });
+  });
+  
+  // Check for idle state periodically
+  const idleTimer = setInterval(() => {
+    const idleTime = Date.now() - lastActivityTime;
+    if (idleTime > IDLE_CLEANUP_THRESHOLD_MS && !cleanupInProgress) {
+      // User is idle - good time to clean up
+      console.log(`🕒 User idle for ${Math.round(idleTime/1000)}s - running cleanup`);
+      cleanupAllButCurrentSession();
+    }
+  }, IDLE_CLEANUP_THRESHOLD_MS);
+  
+  // Store timer reference for cleanup
+  window.__traceIdleCleanupTimer = idleTimer;
+  
+  // Clean up the timer when the window is closed/refreshed
+  window.addEventListener('beforeunload', () => {
+    if (window.__traceIdleCleanupTimer) {
+      clearInterval(window.__traceIdleCleanupTimer);
+    }
+  });
 };
 
 // Add type declaration for global trace data storage
@@ -46,8 +130,259 @@ declare global {
   interface Window {
     __agentTraceCache?: AgentTraceCache;
     __lastTraceEventHash?: string;
+    __traceCleanupTimerActive?: boolean;
+    __traceCleanupTimer?: ReturnType<typeof setInterval>;
+    __traceIdleCleanupTimer?: ReturnType<typeof setInterval>;
+    __currentSessionId?: string;
   }
 }
+
+/**
+ * Clean up old trace data to prevent quota issues
+ * Removes trace data older than MAX_TRACE_AGE_MS
+ */
+const cleanupOldTraces = (): void => {
+  // Set flag to prevent recursive calls
+  cleanupInProgress = true;
+  const now = Date.now();
+  
+  // Don't clean up too frequently
+  if (now - lastCleanupTime < 15000) { // 15 seconds minimum between cleanups
+    cleanupInProgress = false;
+    return;
+  }
+  
+  console.log('🧹 Running trace cleanup for old traces');
+  
+  try {
+    // Clean up localStorage
+    const cachedData = JSON.parse(localStorage.getItem(TRACE_STORAGE_KEY) || '{}');
+    let modified = false;
+    const cutoffTime = now - MAX_TRACE_AGE_MS;
+    
+    // Check each node
+    Object.keys(cachedData).forEach(nodeId => {
+      if (cachedData[nodeId] && cachedData[nodeId].traces) {
+        const traces = cachedData[nodeId].traces;
+        const traceIds = Object.keys(traces);
+        
+        // Filter out old traces
+        const oldTraceIds = traceIds.filter(id => traces[id].lastUpdated < cutoffTime);
+        if (oldTraceIds.length > 0) {
+          oldTraceIds.forEach(id => {
+            delete traces[id];
+            modified = true;
+          });
+          
+          console.log(`🗑️ Removed ${oldTraceIds.length} old traces for ${nodeId}`);
+        }
+      }
+    });
+    
+    // Save changes if any were made
+    if (modified) {
+      localStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(cachedData));
+    }
+    
+    // Also clean up session storage
+    const sessionData = JSON.parse(sessionStorage.getItem(SESSION_TRACE_KEY) || '{}');
+    modified = false;
+    
+    // Remove old sessions and traces
+    Object.keys(sessionData).forEach(sessionId => {
+      const session = sessionData[sessionId];
+      let sessionModified = false;
+      
+      // Check each node in this session
+      Object.keys(session).forEach(nodeId => {
+        if (session[nodeId] && session[nodeId].traces) {
+          const traces = session[nodeId].traces;
+          const traceIds = Object.keys(traces);
+          
+          // Filter out old traces
+          const oldTraceIds = traceIds.filter(id => traces[id].lastUpdated < cutoffTime);
+          if (oldTraceIds.length > 0) {
+            oldTraceIds.forEach(id => {
+              delete traces[id];
+              modified = true;
+              sessionModified = true;
+            });
+          }
+        }
+      });
+      
+      // If the session now has no traces, remove it entirely
+      if (sessionModified) {
+        let hasTraces = false;
+        Object.keys(session).forEach(nodeId => {
+          if (session[nodeId]?.traces && Object.keys(session[nodeId].traces).length > 0) {
+            hasTraces = true;
+          }
+        });
+        
+        if (!hasTraces) {
+          delete sessionData[sessionId];
+          console.log(`🗑️ Removed empty session ${sessionId}`);
+          modified = true;
+        }
+      }
+    });
+    
+    // Save changes if any were made
+    if (modified) {
+      sessionStorage.setItem(SESSION_TRACE_KEY, JSON.stringify(sessionData));
+    }
+    
+    // Update memory cache to match localStorage
+    window.__agentTraceCache = cachedData;
+    
+  } catch (error) {
+    console.error('Error during trace cleanup:', error);
+  }
+  
+  // Update last cleanup time
+  lastCleanupTime = now;
+  cleanupInProgress = false;
+};
+
+/**
+ * Clean up all trace data except for the current session
+ * This is used by the chat component to clean up traces after sending a message
+ */
+export function cleanupAllButCurrentSession(): void {
+  // Set flag to prevent recursive calls
+  cleanupInProgress = true;
+  console.log('🧹 Running cleanup - preserving only current session data');
+  
+  try {
+    // Get current session ID
+    const currentSessionId = window.__currentSessionId;
+    if (!currentSessionId) {
+      console.log('No current session ID found - skipping cleanup');
+      cleanupInProgress = false;
+      return;
+    }
+    
+    // Clean localStorage - keep only traces from current session
+    const cachedData = JSON.parse(localStorage.getItem(TRACE_STORAGE_KEY) || '{}');
+    const nodesToKeep = {};
+    
+    // Only keep nodes from the current session
+    Object.keys(cachedData).forEach(nodeId => {
+      if (cachedData[nodeId].sessionId === currentSessionId) {
+        nodesToKeep[nodeId] = cachedData[nodeId];
+      }
+    });
+    
+    // Save reduced data
+    localStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(nodesToKeep));
+    
+    // Clean sessionStorage - keep only current session
+    const sessionData = JSON.parse(sessionStorage.getItem(SESSION_TRACE_KEY) || '{}');
+    if (sessionData[currentSessionId]) {
+      const reducedSessionData = { [currentSessionId]: sessionData[currentSessionId] };
+      sessionStorage.setItem(SESSION_TRACE_KEY, JSON.stringify(reducedSessionData));
+    }
+    
+    // Update in-memory cache to match localStorage
+    window.__agentTraceCache = nodesToKeep;
+    
+    // Log cleanup stats
+    const originalNodeCount = Object.keys(cachedData).length;
+    const keptNodeCount = Object.keys(nodesToKeep).length;
+    console.log(`🗑️ Cleaned up ${originalNodeCount - keptNodeCount} nodes, keeping ${keptNodeCount} from current session`);
+  } catch (error) {
+    console.error('Error during session cleanup:', error);
+  }
+  
+  // Update last cleanup time and reset flag
+  lastCleanupTime = Date.now();
+  cleanupInProgress = false;
+}
+
+// Counter for storage errors to implement circuit breaker pattern
+let storageErrorCount = 0;
+const MAX_STORAGE_ERRORS = 3;
+const MAX_TRACES_PER_NODE = 5;
+
+/**
+ * Function to optimize trace data by removing redundant information
+ * to reduce storage size
+ * 
+ * @param traceGroup The trace group to optimize
+ * @returns Optimized trace group with reduced size
+ */
+const optimizeTraceData = (traceGroup: TraceGroup): TraceGroup => {
+  // Create a deep copy to avoid modifying the original
+  const optimizedTrace = JSON.parse(JSON.stringify(traceGroup)) as TraceGroup;
+  
+  // Remove redundant fullJson content which often contains duplicate data
+  if (optimizedTrace.tasks && Array.isArray(optimizedTrace.tasks)) {
+    optimizedTrace.tasks.forEach(task => {
+      // Remove fullJson to reduce storage size
+      if (task.fullJson) {
+        task.fullJson = null;
+      }
+      
+      // Handle subtasks
+      if (task.subTasks && Array.isArray(task.subTasks)) {
+        task.subTasks.forEach(subtask => {
+          if (subtask.fullJson) {
+            subtask.fullJson = null;
+          }
+        });
+      }
+    });
+  }
+  
+  return optimizedTrace;
+};
+
+/**
+ * Prunes trace storage to keep only recent traces and reduce storage size
+ * 
+ * @param existingData Current trace cache data
+ * @returns Pruned trace cache data
+ */
+const pruneTraceStorage = (existingData: any): any => {
+  try {
+    const nodeIds = Object.keys(existingData);
+    
+    // Keep only the MAX_TRACES_PER_NODE most recent traces per node
+    nodeIds.forEach(nodeId => {
+      if (existingData[nodeId] && existingData[nodeId].traces) {
+        const traces = existingData[nodeId].traces;
+        const traceIds = Object.keys(traces);
+        
+        // If we have more than the max number of traces, sort by lastUpdated and keep only the most recent
+        if (traceIds.length > MAX_TRACES_PER_NODE) {
+          const sortedTraceIds = traceIds.sort((a, b) => {
+            return traces[b].lastUpdated - traces[a].lastUpdated;
+          });
+          
+          // Keep only the most recent traces
+          const traceIdsToKeep = sortedTraceIds.slice(0, MAX_TRACES_PER_NODE);
+          
+          // Create new traces object with only the traces to keep
+          const prunedTraces = {};
+          traceIdsToKeep.forEach(id => {
+            prunedTraces[id] = traces[id];
+          });
+          
+          // Replace with pruned traces
+          existingData[nodeId].traces = prunedTraces;
+          console.log(`📦 Pruned traces for ${nodeId}: kept ${traceIdsToKeep.length} of ${traceIds.length} traces`);
+        }
+      }
+    });
+    
+    return existingData;
+  } catch (error) {
+    console.warn('Error pruning trace storage:', error);
+    // Return original data on error - this is a best-effort operation
+    return existingData;
+  }
+};
 
 /**
  * Store trace data for an agent node
@@ -81,15 +416,18 @@ export const storeAgentTrace = (
       };
     }
 
+    // Optimize trace data before storing to reduce size
+    const optimizedTraceGroup = optimizeTraceData(traceGroup);
+
     // Add to the in-memory cache
     window.__agentTraceCache[nodeId].traces[traceGroup.id] = {
-      traceGroup,
+      traceGroup: optimizedTraceGroup,
       lastUpdated: Date.now()
     };
     window.__agentTraceCache[nodeId].lastUpdated = Date.now();
 
     // Also update local storage for persistence across page reloads
-    const existingData = JSON.parse(localStorage.getItem(TRACE_STORAGE_KEY) || '{}');
+    let existingData = JSON.parse(localStorage.getItem(TRACE_STORAGE_KEY) || '{}');
     
     // Check if this trace is marked as complete to stop continuous processing
     if (traceGroup.isComplete) {
@@ -105,14 +443,54 @@ export const storeAgentTrace = (
       };
     }
     
-    // Add the trace group
+    // Add the optimized trace group
     existingData[nodeId].traces[traceGroup.id] = {
-      traceGroup,
+      traceGroup: optimizedTraceGroup,
       lastUpdated: Date.now(),
-      isComplete: traceGroup.isComplete || false
+      isComplete: optimizedTraceGroup.isComplete || false
     };
     
-    localStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(existingData));
+    // Prune storage to keep only recent traces
+    existingData = pruneTraceStorage(existingData);
+    
+    try {
+      // Attempt to save to localStorage
+      localStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(existingData));
+      // Reset error count on success
+      storageErrorCount = 0;
+    } catch (storageError) {
+      storageErrorCount++;
+      console.error(`Error storing agent trace data (${storageErrorCount}/${MAX_STORAGE_ERRORS}):`, storageError);
+      
+      if (storageErrorCount >= MAX_STORAGE_ERRORS) {
+        // Attempt emergency cleanup
+        try {
+          // Keep only the essential data - clear everything else
+          const emergencyData = {};
+          
+          // Only keep current node data
+          if (existingData[nodeId]) {
+            emergencyData[nodeId] = {
+              traces: {},
+              lastUpdated: Date.now()
+            };
+            
+            // Just keep this single trace
+            emergencyData[nodeId].traces[traceGroup.id] = {
+              traceGroup: optimizedTraceGroup,
+              lastUpdated: Date.now()
+            };
+          }
+          
+          localStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(emergencyData));
+          console.log('🚨 Emergency storage cleanup performed - deleted all but current trace');
+        } catch (emergencyError) {
+          // If that fails too, try wiping clean
+          localStorage.removeItem(TRACE_STORAGE_KEY);
+          console.error('‼️ Storage completely cleared due to persistent errors');
+        }
+      }
+    }
 
     // For the current session, also store in sessionStorage
     if (sessionId) {
@@ -129,13 +507,48 @@ export const storeAgentTrace = (
         };
       }
       
-      // Add the trace
+      // Add the optimized trace
       sessionData[sessionId][nodeId].traces[traceGroup.id] = {
-        traceGroup,
+        traceGroup: optimizedTraceGroup,
         lastUpdated: Date.now()
       };
       
-      sessionStorage.setItem(SESSION_TRACE_KEY, JSON.stringify(sessionData));
+      // Session storage is typically smaller than local storage
+      // We should prune this too to prevent issues
+      if (sessionData[sessionId][nodeId].traces) {
+        const traceIds = Object.keys(sessionData[sessionId][nodeId].traces);
+        if (traceIds.length > MAX_TRACES_PER_NODE) {
+          const sortedTraceIds = traceIds.sort((a, b) => {
+            const aData = sessionData[sessionId][nodeId].traces[a];
+            const bData = sessionData[sessionId][nodeId].traces[b];
+            return bData.lastUpdated - aData.lastUpdated;
+          });
+          
+          // Keep only the most recent traces
+          const prunedTraces = {};
+          sortedTraceIds.slice(0, MAX_TRACES_PER_NODE).forEach(id => {
+            prunedTraces[id] = sessionData[sessionId][nodeId].traces[id];
+          });
+          
+          sessionData[sessionId][nodeId].traces = prunedTraces;
+        }
+      }
+      
+      try {
+        sessionStorage.setItem(SESSION_TRACE_KEY, JSON.stringify(sessionData));
+      } catch (sessionError) {
+        console.warn('Session storage error, clearing older session data:', sessionError);
+        
+        // If this fails, just clear all session data
+        try {
+          // Keep only current session
+          const reducedSessionData = { [sessionId]: sessionData[sessionId] };
+          sessionStorage.setItem(SESSION_TRACE_KEY, JSON.stringify(reducedSessionData));
+        } catch (e) {
+          // If that still fails, clear everything
+          sessionStorage.removeItem(SESSION_TRACE_KEY);
+        }
+      }
     }
 
     // Use a hash to identify this exact trace data to prevent redundant events
@@ -906,10 +1319,11 @@ export const collaboratorToNodeId = (collaboratorName: string, strictMapping: bo
   }
 
   // EXACT MATCHES - highest priority for specific values we need to ensure are detected
+  // Routing classifier has been merged into supervisor, so direct these to supervisor-agent
   if (collaboratorName === 'ROUTING_CLASSIFIER' || 
       collaboratorName === 'routing_classifier' ||
       collaboratorName === 'RoutingClassifier') {
-    return 'routing-classifier';
+    return 'supervisor-agent';
   }
   
   if (collaboratorName === 'Supervisor' ||
@@ -937,7 +1351,7 @@ export const collaboratorToNodeId = (collaboratorName: string, strictMapping: bo
   } else if (normalizedName.includes('trouble') || normalizedName === 'troubleshoot') {
     return 'ts-agent';
   } else if (normalizedName.includes('rout') || normalizedName.includes('class')) {
-    return 'routing-classifier';
+    return 'supervisor-agent'; // Routing classifier is now merged into supervisor
   } else if (normalizedName.includes('super')) {
     return 'supervisor-agent';
   }
