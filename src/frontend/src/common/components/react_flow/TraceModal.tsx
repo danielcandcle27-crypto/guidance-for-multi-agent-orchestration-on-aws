@@ -9,7 +9,6 @@
  */
 import React, { useState, useMemo, useEffect } from 'react';
 import Modal from '@cloudscape-design/components/modal';
-import Button from '@cloudscape-design/components/button';
 import Box from '@cloudscape-design/components/box';
 import SpaceBetween from '@cloudscape-design/components/space-between';
 import ExpandableSection from '@cloudscape-design/components/expandable-section';
@@ -41,7 +40,6 @@ const TraceModal: React.FC<TraceModalProps> = ({
   // Create a snapshot of the trace data when the modal opens
   // This prevents live updates from disrupting the trace display
   const [traceSnapshot, setTraceSnapshot] = useState<TraceGroupType | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // State for expanded tasks
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
@@ -73,62 +71,6 @@ const TraceModal: React.FC<TraceModalProps> = ({
       setTraceSnapshot(null);
     }
   }, [visible, traceGroup, nodeId]);
-  
-  // Function to manually refresh the trace data
-  const refreshTraceData = () => {
-    setIsRefreshing(true);
-    console.log(`TraceModal: Manually refreshing trace data for ${nodeId}`);
-    
-    // Try to get the latest trace data for this node - use false for strictOwnership to match chat window behavior
-    const latestTrace = getAgentTrace(nodeId, undefined, false);
-    
-    if (latestTrace && latestTrace.tasks?.length) {
-      console.log(`Found updated trace data for ${nodeId} with ${latestTrace.tasks.length} tasks`);
-      // Create a deep copy to ensure we don't get live updates to this object
-      setTraceSnapshot(JSON.parse(JSON.stringify(latestTrace)));
-    } else {
-      // If no trace data is found even with relaxed validation, check all agent traces
-      console.log(`Looking for any trace data related to ${nodeId}...`);
-      
-      // Try to access traces from other related agents
-      const cachedData = JSON.parse(localStorage.getItem('agent-trace-cache') || '{}');
-      let bestTrace = null;
-      
-      // First try supervisor agent traces as they often contain data for all agents
-      if (cachedData['supervisor-agent']?.traces) {
-        const supervisorTraces = Object.values(cachedData['supervisor-agent'].traces || {});
-        
-        for (const traceData of supervisorTraces) {
-          // Add type assertion to inform TypeScript about the structure
-          const trace = (traceData as {traceGroup: TraceGroupType}).traceGroup;
-          // Look for any trace that mentions this agent
-          const agentName = nodeId.replace('-agent', '').replace('-', ' ');
-          
-          if (trace && trace.tasks?.some(task => 
-            task.title?.toLowerCase().includes(agentName) || 
-            (typeof task.content === 'string' && task.content.toLowerCase().includes(agentName))
-          )) {
-            bestTrace = trace;
-            break;
-          }
-        }
-      }
-      
-      if (bestTrace) {
-        console.log(`Found related trace data in supervisor agent traces for ${nodeId}`);
-        setTraceSnapshot(JSON.parse(JSON.stringify(bestTrace)));
-      } else {
-        // If still no trace found, show empty state
-        console.warn(`No trace data found for ${nodeId}, showing empty trace state`);
-        setTraceSnapshot(null);
-      }
-    }
-    
-    // Reset refreshing state after a short delay
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 500);
-  };
   
   // Toggle expanded state for a task
   const toggleTask = (taskId: string) => {
@@ -168,15 +110,6 @@ const TraceModal: React.FC<TraceModalProps> = ({
         <SpaceBetween direction="horizontal" size="xs">
           <div>Trace Details</div>
           <SpaceBetween direction="horizontal" size="xs">
-            {/* Refresh button */}
-            <Button 
-              iconName="refresh" 
-              variant="icon" 
-              loading={isRefreshing}
-              onClick={refreshTraceData}
-              ariaLabel="Refresh trace data"
-              disabled={!traceGroup}
-            />
             {traceSnapshot?.isComplete ? (
               <Badge color="green">Complete</Badge>
             ) : (

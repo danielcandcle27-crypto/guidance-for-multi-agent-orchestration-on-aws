@@ -75,6 +75,15 @@
   filter: drop-shadow(0 0 3px rgba(33, 150, 243, 0.8));
 }
 
+/* Solid blue style for edges after activity timeout */
+.react-flow__edge-path.solid-blue {
+  stroke: #2196F3;
+  stroke-width: 3px;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 2px rgba(33, 150, 243, 0.5));
+  transition: all 0.3s ease;
+}
+
 @keyframes edge-glow-animation {
   0% {
     stroke-dashoffset: 24;

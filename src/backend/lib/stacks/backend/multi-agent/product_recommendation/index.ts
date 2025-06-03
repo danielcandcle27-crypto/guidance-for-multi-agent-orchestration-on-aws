@@ -32,6 +32,7 @@ interface ProductRecommendationSubAgentProps {
 
 export class ProductRecommendationSubAgent extends Construct {
     public readonly agentCollaborator: AgentCollaborator;
+    public readonly knowledgeBaseId: string;
 
     constructor(scope: Construct, id: string, props: ProductRecommendationSubAgentProps) {
         super(scope, id);
@@ -147,7 +148,7 @@ export class ProductRecommendationSubAgent extends Construct {
             ),
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_5_HAIKU_V1_0;
+        const model = BedrockFoundationModel.AMAZON_NOVA_LITE_V1;
 
         const productRecommendationInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,
@@ -192,11 +193,12 @@ export class ProductRecommendationSubAgent extends Construct {
 
         const productRecommendationAgentCollaborator = new AgentCollaborator({
             agentAlias: productRecommendationAgentAlias,
-            collaborationInstruction: "Route productRecommendation questions to this agent.",
+            collaborationInstruction: "Expert in suggesting relevant products based on customer needs.",
             collaboratorName: "ProductRecommendation",
             relayConversationHistory: true,
         });
 
         this.agentCollaborator = productRecommendationAgentCollaborator;
+        this.knowledgeBaseId = productRecommendationKnowledgeBase.knowledgeBaseId;
     }
 }

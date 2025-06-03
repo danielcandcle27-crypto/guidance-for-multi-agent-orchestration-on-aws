@@ -52,8 +52,8 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
   // Process the trace group once for efficiency
   const processedTraceGroupRef = normalizeTraceGroup(traceGroup);
   
-  // Enhanced function to calculate real-time accumulated time for all tasks and subtasks
-  const calculateRealTimeAccumulatedTime = (isComplete: boolean): string => {
+  // Unified function to calculate accumulated time for all tasks and subtasks
+  const calculateAccumulatedTimeUnified = (isComplete: boolean = false): string => {
     let totalTime = 0;
     
     // Process main tasks
@@ -95,7 +95,7 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
                        ((Date.now() - startTime) / 1000).toFixed(2);
       
       // Calculate accurate accumulated time for all tasks and subtasks             
-      const accumulatedTime = calculateRealTimeAccumulatedTime(true);
+      const accumulatedTime = calculateAccumulatedTimeUnified(true);
                        
       setElapsedTimeState({
         totalTime: accumulatedTime, // Use accumulated time instead of just elapsed time
@@ -112,7 +112,7 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
       const currentTime = ((Date.now() - startTime) / 1000).toFixed(2);
       
       // Calculate accurate accumulated time for all tasks and subtasks
-      const accumulatedTime = calculateRealTimeAccumulatedTime(false);
+      const accumulatedTime = calculateAccumulatedTimeUnified(false);
       
       setElapsedTimeState({
         totalTime: accumulatedTime, // Use accumulated time instead of just elapsed time
@@ -278,9 +278,8 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
   // Format agent name based on its proper type
   let agentName = '';
   
-  if (agentType.includes('ROUTING_CLASSIFIER') || agentType.toLowerCase().includes('routing')) {
-    agentName = 'Routing Classifier';
-  } else if (agentType.includes('Supervisor') || agentType === 'Supervisor') {
+  // Routing classifier is now removed - all traces go under Supervisor
+  if (agentType.includes('Supervisor') || agentType === 'Supervisor') {
     agentName = 'Supervisor';
   } else if (agentType.includes('ProductRecommendation') || agentType.toLowerCase().includes('product')) {
     agentName = 'Product Recommendation';
@@ -302,17 +301,17 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     const normalizedType = agentType.toLowerCase();
     
     if (normalizedType.includes('super') || normalizedType === 'supervisor') {
-      return 'Nova Pro';
+      return 'Nova Premier';
     } else if (normalizedType.includes('routing') || normalizedType.includes('classifier')) {
       return 'Nova Micro';
     } else if (normalizedType.includes('product') || normalizedType.includes('recommendation')) {
-      return 'Claude 3.5 Haiku';
+      return 'Nova Lite';
     } else if (normalizedType.includes('trouble')) {
-      return 'Claude 3 Sonnet';
+      return 'DeepSeek-R1';
     } else if (normalizedType.includes('personal')) {
-      return 'Claude 3.5 Sonnet v1';
+      return 'Claude Sonnet 3.7 v1';
     } else if (normalizedType.includes('order') || normalizedType.includes('management')) {
-      return 'Claude 3 Sonnet';
+      return 'Claude 3.5 Haiku';
     }
     
     return 'Claude 3';
@@ -328,35 +327,8 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
   // This allows the time to update dynamically as processing continues
   let totalElapsedSeconds = elapsedTimeState.totalTime || "0.00";
   
-  // Calculate the accurate sum of all task and subtask times
-  const calculateAccumulatedTime = (): string => {
-    let totalTime = 0;
-    
-    // Process main tasks
-    processedTraceGroupRef.tasks
-      .filter(task => task.stepNumber > 0)
-      .forEach(task => {
-        // First, add the task's own time
-        const timeMatch = task.title.match(/\((\d+\.\d+)s\)/);
-        const stepTime = timeMatch ? parseFloat(timeMatch[1]) : 0;
-        totalTime += stepTime;
-        
-        // Then add all subtask times if they exist
-        if (task.subTasks && Array.isArray(task.subTasks)) {
-          task.subTasks.forEach(subtask => {
-            const subTimeMatch = subtask.title.match(/\((\d+\.\d+)s\)/);
-            const subStepTime = subTimeMatch ? parseFloat(subTimeMatch[1]) : 0;
-            totalTime += subStepTime;
-          });
-        }
-      });
-    
-    // Return with two decimal places
-    return totalTime.toFixed(2);
-  };
-  
-  // Calculate accumulated time from all tasks and subtasks
-  const accumulatedTime = calculateAccumulatedTime();
+  // Calculate accumulated time from all tasks and subtasks using the unified function
+  const accumulatedTime = calculateAccumulatedTimeUnified();
   
   // Find the maximum step number instead of just counting array length
   const stepCount = processedTraceGroupRef.tasks.length > 0
@@ -366,7 +338,8 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     : 0;
   
   // Improved display showing step count and accurate accumulated processing time
-  const timeDisplay = `${stepCount} steps (${accumulatedTime}s processing)`;
+  // Using the same calculation for display time as used in the elapsed time state
+  const timeDisplay = `${stepCount} steps (${accumulatedTime}s)`;
 
   // Helper to extract time value from formatted time string
   const extractTimeValue = (timeString: string): number => {
@@ -502,6 +475,74 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
                 key={`${index}-${task.title}`}
                 className={`trace-task ${expandedTasks[index] ? 'expanded' : ''}`}
               >
+                {/* Handle Final Response tasks for all agent types */}
+                {(task.title === 'Final Response' || task.stepNumber === 0 && task.title === 'Final Response') && (
+                  <div className="final-response-handler" style={{ display: 'none' }}>
+                    {(() => {
+                      // When any agent's Final Response task is rendered in the trace dropdown
+                      const content = task.content?.toString() || '';
+                      const detectionTime = Date.now();
+                      
+                      if (content && !task._finalResponseDispatched) {
+                        task._finalResponseDispatched = true;
+                        console.log(`⏱️ [${detectionTime}] TIMING: Final Response detected in ${agentName} trace dropdown - contentLength: ${content.length}`);
+                        
+                        // For Supervisor agent, dispatch special event for UI rendering
+                        if (agentName === 'Supervisor') {
+                          console.log(`⏱️ [${detectionTime}] TIMING: Supervisor Final Response - dispatching event`);
+                          
+                          // Use setTimeout to ensure this runs after the current render cycle
+                          setTimeout(() => {
+                            const eventTime = Date.now();
+                            console.log(`⏱️ [${eventTime}] TIMING: Supervisor Final Response event dispatching (delay: ${eventTime - detectionTime}ms)`);
+                            
+                            const finalResponseEvent = new CustomEvent('supervisorFinalResponseRendered', {
+                              detail: {
+                                content: content,
+                                traceId: traceGroup.id,
+                                timestamp: eventTime,
+                                detectionTime: detectionTime,
+                                traceGroup: traceGroup
+                              }
+                            });
+                            document.dispatchEvent(finalResponseEvent);
+                          }, 0);
+                        } else {
+                          // For other agents, log the final response but don't dispatch UI events
+                          console.log(`⏱️ [${detectionTime}] TIMING: ${agentName} Final Response detected - dispatching event`);
+                          
+                          // Mark the trace group as having a final response
+                          if (traceGroup) {
+                            traceGroup.hasFinalResponse = true;
+                            traceGroup.finalResponseTimestamp = detectionTime;
+                            traceGroup.finalResponseContent = content;
+                            // Initialize finalResponseProcessed flag to track UI updates
+                            traceGroup.finalResponseProcessed = false;
+                            
+                            // Add a direct dispatch for non-Supervisor agents as well to speed up rendering
+                            setTimeout(() => {
+                              const eventTime = Date.now();
+                              console.log(`⏱️ [${eventTime}] TIMING: ${agentName} Final Response event dispatching (delay: ${eventTime - detectionTime}ms)`);
+                              
+                              const finalResponseEvent = new CustomEvent('agentFinalResponseRendered', {
+                                detail: {
+                                  content: content,
+                                  traceId: traceGroup.id,
+                                  timestamp: eventTime,
+                                  detectionTime: detectionTime,
+                                  agentName: agentName,
+                                  traceGroup: traceGroup
+                                }
+                              });
+                              document.dispatchEvent(finalResponseEvent);
+                            }, 0);
+                          }
+                        }
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
                 <div 
                   className="trace-task-header"
                   onClick={(e) => toggleTaskExpanded(index, e)}
@@ -534,13 +575,15 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
                   </div>
                 </div>
                 
-                {expandedTasks[index] && (
-                  <div className="trace-task-content" style={{ color: agentColor }}>
-                    {formatContent(task.content)}
-                    
-                    {/* Render subtasks if they exist */}
-                    {task.subTasks && task.subTasks.length > 0 && (
-                      <div className="trace-subtasks">
+{expandedTasks[index] && (
+  <div className="trace-task-content" style={{ color: agentColor }}>
+    {/* Only show content if it's not a Model invocation or it's a Model invocation without subtasks */}
+    {(!task.title.includes("Invoking Model") || !task.subTasks || task.subTasks.length === 0) && 
+      formatContent(task.content)}
+    
+    {/* Render subtasks if they exist */}
+    {task.subTasks && task.subTasks.length > 0 && (
+      <div className="trace-subtasks">
                         {task.subTasks.map((subtask, subTaskIndex) => (
                           <div 
                             key={`${index}-${subTaskIndex}`}

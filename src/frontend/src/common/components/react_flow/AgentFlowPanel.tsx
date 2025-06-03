@@ -269,8 +269,8 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
   const activateAgent = useCallback((nodeId: string, traceGroup: TraceGroup, options?: { noAnimation?: boolean }) => {
    // console.log(`Activating agent ${nodeId} with trace data`, { nodeId, traceGroupId: traceGroup?.id });
    
-   // Check if we should skip animations
-   const skipAnimation = options?.noAnimation === true;
+   // Check if we should skip animations - always skip for supervisor-agent
+   const skipAnimation = options?.noAnimation === true || nodeId === 'supervisor-agent';
     
     // Force React Flow to update the node appearance with isProcessing flag
     // Note: Directly manipulating the node's data object is key to state updates
@@ -313,9 +313,16 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
     const connectedEdges = findConnectedEdges(nodeId);
     
     // Activate connected edges with glowing animation
-    if (connectedEdges.length > 0) {
+    // Skip animation for supervisor-agent node connections and
+    // Skip animating the customer-supervisor connection when browser node is active
+    if (connectedEdges.length > 0 && !skipAnimation) {
       setEdges(edges => 
         edges.map(e => {
+          // Skip animating the top connection to supervisor when browser node is active
+          if (nodeId === 'customer' && e.id === 'e-customer-supervisor') {
+            return e; // Don't animate this edge when browser node is active
+          }
+          
           if (connectedEdges.some(ce => ce.id === e.id)) {
             return {
               ...e,
@@ -692,11 +699,14 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
               isComplete: false // Not complete until we get final response
             };
             
-            // Store and activate the browser node
+            // Store and activate the browser node - but with special flag for browser-to-supervisor connections
             console.log('%c[Browser Node] Storing user input in browser trace:', 'color: #FF5722; font-weight: bold;', 
                       { taskCount: tasks.length, userInput: userInputContent.substring(0, 50) + '...' });
             storeAgentTrace(browserNodeId, browserTraceGroup);
-            activateAgent(browserNodeId, browserTraceGroup);
+            
+            // Use special option to prevent animating the connection to supervisor when ONLY browser node is active
+            // This will keep the browser node active but not animate the connection to supervisor
+            activateAgent(browserNodeId, browserTraceGroup, { noAnimation: true });
           }
           
           // Handle system response separately
@@ -736,9 +746,9 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
                 finalElapsedTime: ((Date.now() - startTime) / 1000).toFixed(2)
               };
               
-              // Store and activate the browser node
+              // Store and activate the browser node - with special flag to prevent animating the connection to supervisor
               storeAgentTrace(browserNodeId, browserTraceGroup);
-              activateAgent(browserNodeId, browserTraceGroup);
+              activateAgent(browserNodeId, browserTraceGroup, { noAnimation: true });
               return;
             }
             
@@ -1530,6 +1540,43 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
       // Important: For agent nodes, we'll prioritize showing trace data in the node itself
       const isAgentNode = node.id.includes('-agent') || node.id === 'routing-classifier' || node.id === 'supervisor-agent';
       const isBrowserNode = node.id === 'customer';
+      const isSupervisorNode = node.id === 'supervisor-agent';
+      
+      // Special handling for supervisor node - explicitly deactivate all connected edges FIRST
+      // before any other processing to prevent edge animations on node click
+      if (isSupervisorNode) {
+        // Find all connected edges to supervisor
+        const supervisorEdges = edges.filter(edge => 
+          edge.source === 'supervisor-agent' || 
+          edge.target === 'supervisor-agent' ||
+          edge.id.includes('supervisor')
+        );
+        
+        // Immediately remove active class from all supervisor edges
+        supervisorEdges.forEach(edge => {
+          const edgeElement = document.getElementById(edge.id);
+          if (edgeElement) {
+            edgeElement.classList.remove('active');
+          }
+        });
+        
+        // Also update edge state through React
+        setEdges(edges => 
+          edges.map(e => {
+            if (supervisorEdges.some(se => se.id === e.id)) {
+              return {
+                ...e,
+                data: {
+                  ...e.data,
+                  isActive: false
+                },
+                animated: false
+              };
+            }
+            return e;
+          })
+        );
+      }
       
       // Check if this node has any trace data before animating
       // Use strict ownership validation to ensure we only consider traces that belong to this node
@@ -1540,16 +1587,51 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
                               existingTrace.tasks.length > 0;
       
       // Always notify that a node has been selected - this enables trace data streaming to the node
-      // We'll add special handling for supervisor node - always set noAnimation to true to prevent edge animations
-      const noAnimation = !hasValidTraceData || node.id === 'supervisor-agent';
+      // Force noAnimation to true for supervisor-agent to prevent edge animations
+      const noAnimation = !hasValidTraceData || isSupervisorNode;
       const nodeSelectionEvent = new CustomEvent('agentNodeSelected', {
         detail: {
           nodeId: node.id,
-          noAnimation: noAnimation, // Don't animate if no trace data exists or if it's supervisor node
+          noAnimation: noAnimation, // Force noAnimation true for supervisor node
           timestamp: Date.now()
         }
       });
       document.dispatchEvent(nodeSelectionEvent);
+      
+      // Special handling for supervisor node - explicitly deactivate all connected edges
+      if (isSupervisorNode) {
+        // Find all connected edges to supervisor
+        const supervisorEdges = edges.filter(edge => 
+          edge.source === 'supervisor-agent' || 
+          edge.target === 'supervisor-agent' ||
+          edge.id.includes('supervisor')
+        );
+        
+        // Immediately remove active class from all supervisor edges
+        supervisorEdges.forEach(edge => {
+          const edgeElement = document.getElementById(edge.id);
+          if (edgeElement) {
+            edgeElement.classList.remove('active');
+          }
+        });
+        
+        // Also update edge state through React
+        setEdges(edges => 
+          edges.map(e => {
+            if (supervisorEdges.some(se => se.id === e.id)) {
+              return {
+                ...e,
+                data: {
+                  ...e.data,
+                  isActive: false
+                },
+                animated: false
+              };
+            }
+            return e;
+          })
+        );
+      }
       
       // Special handling for browser node to show both sent and received messages
       if (isBrowserNode) {
@@ -1958,10 +2040,62 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
       clearTimeout(inactivityTimeoutRef.current);
     }
     
-    // Set a new inactivity timeout - stop polling after 5 seconds of no trace updates
+    // Set a new inactivity timeout - convert animations to solid blue lines after 2 seconds of no trace updates
     inactivityTimeoutRef.current = setTimeout(() => {
+      console.log("⏱️ 2-second inactivity timeout reached - freezing animations and setting solid blue lines");
+      
+      // Stop polling
       setIsPollingActive(false);
-    }, 5000);
+      
+      // Track which edges were active for styling
+      const activeEdgeIds = new Set<string>();
+      
+      // Find all active edges and store their IDs
+      const activeEdges = document.querySelectorAll('.react-flow__edge-path.active');
+      activeEdges.forEach((edge) => {
+        const edgeId = edge.id;
+        if (edgeId) activeEdgeIds.add(edgeId);
+        
+        // Remove active animation class
+        edge.classList.remove('active');
+        
+        // Add solid-blue class for static styling
+        edge.classList.add('solid-blue');
+        
+        // Set a solid blue stroke directly on the element
+        (edge as SVGElement).style.stroke = '#2196F3';
+        (edge as SVGElement).style.strokeWidth = '3px';
+      });
+      
+      // Also update edge state through React
+      setEdges(edges => 
+        edges.map(edge => {
+          const wasActive = activeEdgeIds.has(edge.id) || edge.data?.isActive === true;
+          
+          return {
+            ...edge,
+            data: {
+              ...edge.data,
+              isActive: false,
+              wasFrozenActive: wasActive // Track which edges were active before freezing
+            },
+            animated: false,
+            // Apply solid blue styling to previously active edges
+            style: wasActive ? {
+              ...edge.style,
+              stroke: '#2196F3',
+              strokeWidth: 3
+            } : edge.style
+          };
+        })
+      );
+      
+      // Dispatch event to notify other components
+      const freezeAnimationsEvent = new CustomEvent('freezeAnimations', {
+        detail: { timestamp: Date.now(), preserveActiveEdges: true }
+      });
+      document.dispatchEvent(freezeAnimationsEvent);
+    }, 2000); // 2 seconds of inactivity
   }, []);
   
   // CRITICAL FIX: Complete disable of local storage polling mechanism

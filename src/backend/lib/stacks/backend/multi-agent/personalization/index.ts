@@ -32,6 +32,7 @@ interface PersonalizationSubAgentProps {
 
 export class PersonalizationSubAgent extends Construct {
     public readonly agentCollaborator: AgentCollaborator;
+    public readonly knowledgeBaseId: string;
 
     constructor(scope: Construct, id: string, props: PersonalizationSubAgentProps) {
         super(scope, id);
@@ -141,7 +142,7 @@ export class PersonalizationSubAgent extends Construct {
             ),
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_5_SONNET_V1_0;
+        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_7_SONNET_V1_0;
 
         const personalizationInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,
@@ -182,11 +183,12 @@ export class PersonalizationSubAgent extends Construct {
 
         const personalizationAgentCollaborator = new AgentCollaborator({
             agentAlias: personalizationAgentAlias,
-            collaborationInstruction: "Route personalization questions to this agent.",
+            collaborationInstruction: "Expert in understanding customer preferences and personalizing experiences.",
             collaboratorName: "Personalization",
             relayConversationHistory: true,
         });
 
         this.agentCollaborator = personalizationAgentCollaborator;
+        this.knowledgeBaseId = personalizationKnowledgeBase.knowledgeBaseId;
     }
 }

@@ -28,23 +28,7 @@ export const createInitialNodes = (): Node[] => [
     type: 'customAgent'
   },
 
-  // ROUTING_CLASSIFIER node between customer and supervisor
-  {
-    id: 'routing-classifier',
-    data: {
-      label: 'Routing Classifier',
-      type: 'router',
-      borderColor: BedrockTheme.colors.crypto,
-      bgColor: '#E8F5E9', // Light green background
-      icon: <FaBrain size={18} color={BedrockTheme.colors.crypto} />,
-      isProcessing: false,
-      processingComplete: false
-    },
-    position: { x: 590, y: 195 },
-    type: 'customAgent'
-  },
-
-  // Supervisor Agent below the routing classifier
+  // Supervisor Agent - routing classifier functionality has been merged into this
   {
     id: 'supervisor-agent',
     data: {
@@ -145,22 +129,6 @@ export const createInitialEdges = (): Edge[] => [
     }
   },
 
-  {
-    id: 'e-supervisor-sa0',
-    source: 'supervisor-agent',
-    target: 'routing-classifier',
-    animated: false,
-    style: { strokeWidth: 2 },
-    sourceHandle: 'right',
-    targetHandle: 'left',
-    type: 'customEdge',
-    data: {
-      callCount: 0,
-      isActive: false,
-      agentName: 'Routing Classifier'
-    }
-  },
-
   // Supervisor to all sub-agents - IDs follow format e-supervisor-sa# for trace data connection
   {
     id: 'e-supervisor-sa1', // Order Management
@@ -230,7 +198,6 @@ export const nodeToAgentName = {
   'product-rec-agent': 'Product Recommendation', 
   'personalization-agent': 'Personalization',
   'ts-agent': 'Troubleshooting',
-  'routing-classifier': 'Routing Classifier',
   'supervisor-agent': 'Supervisor'
 };
 
@@ -239,8 +206,7 @@ export const edgeTargetMap = {
   'e-supervisor-sa1': 'order-mgmt-agent',
   'e-supervisor-sa2': 'product-rec-agent',
   'e-supervisor-sa3': 'personalization-agent',
-  'e-supervisor-sa4': 'ts-agent',
-  'e-supervisor-sa0': 'routing-classifier'
+  'e-supervisor-sa4': 'ts-agent'
 };
 
 // Create a path map that defines what edges should be active based on agent activation
@@ -249,7 +215,6 @@ export const agentPathMap = {
   'product-rec-agent': ['e-supervisor-sa2', 'e-customer-supervisor'],
   'personalization-agent': ['e-supervisor-sa3', 'e-customer-supervisor'],
   'ts-agent': ['e-supervisor-sa4', 'e-customer-supervisor'],
-  'routing-classifier': ['e-supervisor-sa0', 'e-customer-supervisor'],
   'supervisor-agent': ['e-customer-supervisor']
 };
 

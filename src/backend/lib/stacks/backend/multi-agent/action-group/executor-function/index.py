@@ -35,6 +35,8 @@ def athena_query_handler():
 
 def execute_athena_query(query, s3_output):  # nosec
     try:
+        # Always ensure query is lowercase before execution
+        query = query.lower() if isinstance(query, str) else query
         response = athena_client.start_query_execution(
             QueryString=query, ResultConfiguration={"OutputLocation": s3_output}
         )

@@ -1,31 +1,64 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { StatusIndicator, Spinner, Box } from '@cloudscape-design/components';
+import { StatusIndicator, StatusIndicatorProps, Spinner, Box, Alert, Button } from '@cloudscape-design/components';
 import BaseTable from './BaseTable';
 import { fetchInventory } from '../api';
 import { FlashbarContext } from '../../../../common/contexts/Flashbar';
 
+// Storage key for tracking fetch attempts
+const INVENTORY_FETCH_ATTEMPT_KEY = 'inventory_fetch_attempted';
+
 const InventoryTable: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // Track if a fetch has already been attempted to prevent infinite retries
+  const [fetchAttempted, setFetchAttempted] = useState<boolean>(() => {
+    return localStorage.getItem(INVENTORY_FETCH_ATTEMPT_KEY) === 'true';
+  });
   const { addFlashbarItem } = useContext(FlashbarContext);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchInventory();
-        // Transform data if needed
-        setInventory(data);
-      } catch (error) {
-        console.error("Error loading inventory data:", error);
-        addFlashbarItem("error", "Failed to load inventory data. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Function to reset the fetch attempt state
+  const resetFetchAttempt = () => {
+    localStorage.removeItem(INVENTORY_FETCH_ATTEMPT_KEY);
+    setFetchAttempted(false);
+    setLoading(true);
+    setError(null);
+  };
 
-    loadData();
-  }, [addFlashbarItem]);
+  useEffect(() => {
+    // Only attempt to load data if we haven't already tried
+    if (!fetchAttempted) {
+      const loadData = async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          // Mark that we're attempting a fetch
+          localStorage.setItem(INVENTORY_FETCH_ATTEMPT_KEY, 'true');
+          setFetchAttempted(true);
+          
+          const data = await fetchInventory();
+          setInventory(data);
+          // If successful, we can clear the fetch attempt marker
+          localStorage.removeItem(INVENTORY_FETCH_ATTEMPT_KEY);
+        } catch (error) {
+          console.error("Error loading inventory data:", error);
+          const errorMessage = error instanceof Error ? 
+            `Failed to load inventory data: ${error.message}` :
+            'Failed to load inventory data. Please try again.';
+          
+          setError(errorMessage);
+          addFlashbarItem("error", errorMessage);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadData();
+    } else {
+      // If we've already attempted a fetch and it likely failed, don't try again automatically
+      setLoading(false);
+    }
+  }, [addFlashbarItem, fetchAttempted]);
 
   const columnDefinitions = [
     {
@@ -70,7 +103,7 @@ const InventoryTable: React.FC = () => {
       sortingField: "reorder_threshold"
     },
     {
-      id: "reorder_quantity",
+      id: "quantity_on_order",
       header: "Quantity On Order",
       cell: item => item.quantity_on_order,
       sortingField: "quantity_on_order"
@@ -110,6 +143,19 @@ const InventoryTable: React.FC = () => {
         <Box variant="p" padding={{ top: "s" }}>
           Loading inventory data...
         </Box>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box padding="l">
+        <Alert type="error" header="Error loading inventory data">
+          {error}
+          <Box padding={{ top: "m" }}>
+            <Button onClick={resetFetchAttempt}>Retry</Button>
+          </Box>
+        </Alert>
       </Box>
     );
   }
