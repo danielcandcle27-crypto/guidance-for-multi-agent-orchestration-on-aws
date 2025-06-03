@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useRef, useState, useMemo } from "react";
 
 import Avatar from "@cloudscape-design/chat-components/avatar";
 import ChatBubble from "@cloudscape-design/chat-components/chat-bubble";
-import { Spinner, StatusIndicator, Table, Cards, Badge, TextContent } from "@cloudscape-design/components";
+import { Spinner, StatusIndicator, Table, Cards, Badge, TextContent, Tabs } from "@cloudscape-design/components";
 import Box from "@cloudscape-design/components/box";
 import Container from "@cloudscape-design/components/container";
 import PromptInput from "@cloudscape-design/components/prompt-input";
@@ -16,6 +16,9 @@ import { onUpdateChat } from "../../../common/graphql/subscriptions";
 import { sendMessage } from "./api";
 import { AgentFlowPanel } from '../../../common/components/react_flow/AgentFlowPanel';
 import SampleQuestions from "./SampleQuestions";
+import HowToUseDemo from "./HowToUseDemo";
+import InitialWorkflowImage from "./InitialWorkflowImage";
+import DataTabs from "../Data";
 import { parseTraceData, registerMessageHandler, unregisterMessageHandler, generateConnectionId } from '../../../utilities/multiWebsocket';
 import { handleTraceMessage, parseTraceJson, TraceGroup as TraceGroupType, TraceState } from '../../../utilities/traceParser';
 import TraceGroup from '../../../common/components/react_flow/TraceGroup';
@@ -57,6 +60,7 @@ const AUTHORS: {
 const getModelId = (_model: string) => {
     return "us.amazon.nova-micro-v1:0"; // Default model
 };
+
 
 // Helper function to determine if a response is complete
 const isResponseComplete = (response: string): boolean => {
@@ -116,14 +120,16 @@ const formatDuration = (ms: number): string => {
     }
 };
 
-interface ChatProps {
-    onLoadingStateChange?: (isLoading: boolean) => void;
-}
+interface ChatProps {}
 
-const Chat = ({ onLoadingStateChange }: ChatProps) => {
+const Chat = () => {
     const [sessionId] = useState(uuidv4());
     const [message, setMessage] = useState("");
-    const [messages, setMessages] = useState<Message[]>([]); // Initialize with empty array to prevent animation
+    // Initialize with empty messages array
+    const [messages, setMessages] = useState<Message[]>([]);
+    
+    // Track if this is the initial load
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
     
     // Message history state for the drawer
     const [messagePairs, setMessagePairs] = useState<{
@@ -134,12 +140,9 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
     }[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     
-    // Custom setter to update both local state and parent component
+    // Custom setter to update loading state
     const updateLoadingState = (newLoadingState: boolean) => {
         setIsLoading(newLoadingState);
-        if (onLoadingStateChange) {
-            onLoadingStateChange(newLoadingState);
-        }
     };
     const [currentResponseId, setCurrentResponseId] = useState<string | null>(null);
     const [selectedModel] = useState("default"); // Default model selection
@@ -188,6 +191,14 @@ const Chat = ({ onLoadingStateChange }: ChatProps) => {
 
     // Access the Flashbar context
     const { addFlashbarItem } = useContext(FlashbarContext);
+    
+    // Display workflow image in the middle on initial load
+    // Only hide the initial image when there are messages in the chat
+    useEffect(() => {
+        if (isInitialLoad && messages.length > 1) { // > 1 because there's always an initial greeting
+            setIsInitialLoad(false);
+        }
+    }, [isInitialLoad, messages.length]);
 
     const client = generateClient();
 
@@ -1638,14 +1649,12 @@ const handleInputFocus = () => {
         };
     }, [messages, addFlashbarItem]);
 
-    return (
-        <>
-            {/* Sample Questions Section - spans full width */}
-            <Box margin={{ bottom: "l" }} padding={{ horizontal: "s" }}>
-                <SampleQuestions onQuestionClick={handleQuickLinkClick} />
-            </Box>
-
-            <Grid
+    // State to manage the active tab
+    const [activeTabId, setActiveTabId] = useState("chat");
+    
+    // Content for the Chat tab
+    const chatContent = (
+        <Grid
                 gridDefinition={[
                     { colspan: { default: 12, xxs: showWorkflow ? 7 : 12 } },
                     { colspan: { default: 12, xxs: showWorkflow ? 5 : 0 } }
@@ -1731,6 +1740,8 @@ const handleInputFocus = () => {
                     disableContentPaddings
                     footer={
                         <SpaceBetween size="s">
+                            {/* Sample Questions Section - spans full width at the bottom of the chat */}
+                            <SampleQuestions onQuestionClick={handleQuickLinkClick} />
                             <PromptInput
                                 ref={promptInputRef}
                                 disabled={isLoading}
@@ -1768,6 +1779,13 @@ const handleInputFocus = () => {
                         {activeTab === 'chat' ? (
                             <MemoizedScrollableContainer ref={messagesContainerRef}>
                                 <SpaceBetween size="l">
+                                    {/* Display the workflow image in the center on initial load 
+                                        or when there are no messages */}
+                                    {(isInitialLoad || messages.length <= 1) && (
+                                        <div style={{ marginBottom: '20px' }}>
+                                            <InitialWorkflowImage />
+                                        </div>
+                                    )}
                                     {/* All combined messages in reversed order (newest first) */}
                                     {[
                                         // User messages (always at the top)
@@ -2096,7 +2114,34 @@ const handleInputFocus = () => {
                     </Container>
                 </Box>
             )}
-        </Grid>
+            </Grid>
+    );
+    
+    return (
+        <>
+            {/* How to use this demo - spans full width */}
+            <Box margin={{ bottom: "l" }} padding={{ horizontal: "s" }}>
+                <HowToUseDemo />
+            </Box>
+            
+            {/* Tabs for Chat and Data */}
+            <Tabs
+                activeTabId={activeTabId}
+                onChange={({ detail }) => setActiveTabId(detail.activeTabId)}
+                tabs={[
+                    {
+                        label: "Chat",
+                        id: "chat",
+                        content: chatContent,
+                    },
+                    {
+                        label: "Data",
+                        id: "data",
+                        content: <DataTabs />,
+                        disabled: isLoading
+                    },
+                ]}
+            />
         </>
     );
 };
