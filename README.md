@@ -278,7 +278,9 @@ Now, visit <http://localhost:3000> on a browser of choice (Chrome/Firefox are re
 
 If you receive a blank screen, refresh the page.
 
-You also have a the cloudfront urlcreated in the terminal to access the application.
+You also have a the cloudfront url created in the terminal to access the application.
+
+![athena3](docs/kit/images/ui_image.png)
 
 
 ---
