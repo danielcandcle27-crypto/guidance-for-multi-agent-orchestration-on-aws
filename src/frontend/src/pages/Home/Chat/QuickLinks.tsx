@@ -26,7 +26,7 @@ const QuickLinks: React.FC<QuickLinksProps> = ({ onLinkClick }) => {
     {
       id: "recommendation-faq",
       title: "Recommendation & FAQ",
-      text: "I like speakers alot. Are there any available products in stock that match my preference? And in case I run into issues with the product, give me some troubleshooting tips for the products. - Logged in as cust007 (new request)",
+      text: "Are there any available speakers in stock that I would like? And in case I run into issues with the product, give me some troubleshooting tips for the products. - Logged in as cust007 (new request)",
     }
   ];
 
