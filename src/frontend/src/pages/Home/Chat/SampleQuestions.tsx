@@ -39,31 +39,19 @@ const SampleQuestions: React.FC<SampleQuestionsProps> = ({ onQuestionClick }) =>
       variant="stacked"
     >
       <Box padding="s">
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center", 
-          width: "100%",
-          gap: "12px"
-        }}>
+        {/* Create individual SupportPromptGroup components for each question to make them display horizontally */}
+        <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", gap: "10px" }}>
           {sampleQuestions.map((question) => (
-            <button
-              key={question.id}
-              onClick={() => onQuestionClick(question.text)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#0073bb",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "14px",
-                whiteSpace: "nowrap",
-                flex: "1 1 auto",
-              }}
-            >
-              {question.title}
-            </button>
+            <div key={question.id} style={{ flex: "1 1 0" }}>
+              <SupportPromptGroup
+                items={[{
+                  id: question.id,
+                  text: question.title
+                }]}
+                onItemClick={() => onQuestionClick(question.text)}
+                ariaLabel={`Sample question: ${question.title}`}
+              />
+            </div>
           ))}
         </div>
       </Box>
