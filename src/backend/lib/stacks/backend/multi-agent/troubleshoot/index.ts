@@ -120,16 +120,11 @@ export class TroubleshootSubAgent extends Construct {
             checkIntervalHours: 24
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_SONNET_V1_0;
-
-        const troubleshootInferenceProfile = CrossRegionInferenceProfile.fromConfig({
-            geoRegion: CrossRegionInferenceProfileRegion.US,
-            model: model,
-        });
+        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_OPUS_V1_0;
 
         const troubleshootAgent = new Agent(this, "troubleshootAgent", {
             //name: "TroubleshootAgent-" + Date.now(), 
-            foundationModel: troubleshootInferenceProfile,
+            foundationModel: model, // Using model directly instead of inference profile since Claude 3 Opus doesn't support profiles
             instruction: readFileSync(path.join(__dirname, "instructions.txt"), "utf-8"),
             knowledgeBases: [troubleshootKnowledgeBase],
             userInputEnabled: true,
@@ -142,13 +137,11 @@ export class TroubleshootSubAgent extends Construct {
                 actions: [
                     "bedrock:InvokeModel",
                     "bedrock:InvokeModelWithResponseStream",
-                    "bedrock:GetInferenceProfile",
                     "bedrock:GetFoundationModel",
                     "bedrock:Retrieve", // Add permission to retrieve from knowledge base
                 ],
                 resources: [
                     `arn:aws:bedrock:*::foundation-model/${model.modelId}`,
-                    troubleshootInferenceProfile.inferenceProfileArn,
                     troubleshootKnowledgeBase.knowledgeBaseArn, // Add knowledge base ARN
                 ],
             })
