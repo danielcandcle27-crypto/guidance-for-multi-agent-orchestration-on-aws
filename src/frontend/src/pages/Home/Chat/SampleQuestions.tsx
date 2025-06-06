@@ -19,7 +19,7 @@ const SampleQuestions: React.FC<SampleQuestionsProps> = ({ onQuestionClick }) =>
     {
       id: "customer-preference",
       title: "Recommendation & Troubleshoot",
-      text: "I'm really interested in watches. Let me know what you have that you think i'd like. Make sure to let me know of any known issues and warranty information too. - Logged in as cust002 (new request)",
+      text: "I'm really interested in smart type watches. I dont care about cost. Let me know what you have that you think i'd like. Make sure to let me know of any known issues and warranty information too. - Logged in as cust002 (new request)",
     },
     {
       id: "troubleshoot-watch",
@@ -29,7 +29,7 @@ const SampleQuestions: React.FC<SampleQuestionsProps> = ({ onQuestionClick }) =>
     {
       id: "recommendation-faq",
       title: "Recommendation & FAQ",
-      text: "Are there any available speakers in stock that I would like that are low in cost? And in case I run into issues with the product, give me some troubleshooting tips for the products. - Logged in as cust007 (new request)",
+      text: "Are there any available speakers in stock that I would like under $100? And in case I run into issues with the product, give me some troubleshooting tips for the products. - Logged in as cust007 (new request)",
     }
   ];
 
