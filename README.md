@@ -143,8 +143,8 @@ We recommend creating a [Budget](https://docs.aws.amazon.com/cost-management/lat
 ### Model access
 
 Navigate to the Amazon Bedrock console, and enable the following models: 
-`Titan Embeddings G1 - Text`
 `Cohere Embed English V3`
+`Nova Premier`
 `Nova Pro`
 `Nova Lite`
 `Nova Micro`
@@ -152,7 +152,6 @@ Navigate to the Amazon Bedrock console, and enable the following models:
 `Claude 3 Opus`
 `Sonnet 3.5 V2`
 `Haiku 3.5 V1`
-`DeepSeek-R1`
 
 ![Diagram](docs/kit/images/model_access.png)
 
@@ -171,7 +170,7 @@ Install `aws-cli` from [here](https://aws.amazon.com/cli/). Now, we need to conf
 aws configure
 AWS Access Key ID [**********************]: 
 AWS Secret Access Key [********************]:
-Default region name us-west-2
+Default region name us-east-1
 Default output format: json
 
 ```
@@ -226,7 +225,7 @@ Edit the variables -
     "accounts": {
         "dev": {
             "number": "{ACCOUNT_NUMBER}",
-            "region": "us-west-2"
+            "region": "us-east-1"
         }
     }
 ```

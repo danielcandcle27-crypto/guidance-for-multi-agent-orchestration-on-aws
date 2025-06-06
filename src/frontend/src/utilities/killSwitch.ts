@@ -104,6 +104,14 @@ export const setupGlobalKillSwitch = (): void => {
       // Mark processing as complete
       window.__processingComplete = true;
       
+      // CRITICAL FIX: Clear the agent-trace-cache in localStorage to prevent reprocessing loops
+      try {
+        localStorage.removeItem('agent-trace-cache');
+        console.log('🧹 Cleared agent trace cache from localStorage');
+      } catch (e) {
+        console.error('Error clearing trace cache:', e);
+      }
+      
       // Also freeze all flow animations when kill switch is activated
       if (!flowAnimationsFrozen) {
         setFlowAnimationsFrozen(true);
