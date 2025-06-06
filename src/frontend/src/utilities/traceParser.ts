@@ -90,7 +90,7 @@ export function getModelLabelForTrace(traceType: string): string {
   switch (traceType) {
     case AGENT_TYPES.SUPERVISOR:
     case 'Supervisor':
-      return 'Nova Premier';
+      return 'Nova Pro';
     case AGENT_TYPES.PRODUCT_RECOMMENDATION:
     case 'ProductRecommendation':
       return 'Nova Lite';
