@@ -7,7 +7,7 @@
     "midway": false,
     "accounts": {
         "dev": {
-            "number": "854718764094",
+            "number": "{ACCOUNT_NUMBER}",
             "region": "us-east-1"
         }
     }
