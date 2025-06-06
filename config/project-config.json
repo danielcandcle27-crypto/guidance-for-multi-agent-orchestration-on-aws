@@ -8,7 +8,7 @@
     "accounts": {
         "dev": {
             "number": "{ACCOUNT_NUMBER}",
-            "region": "us-west-2"
+            "region": "us-east-1"
         }
     }
 }

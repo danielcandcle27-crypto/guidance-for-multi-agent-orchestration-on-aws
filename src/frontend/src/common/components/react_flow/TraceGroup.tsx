@@ -301,7 +301,7 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     const normalizedType = agentType.toLowerCase();
     
     if (normalizedType.includes('super') || normalizedType === 'supervisor') {
-      return 'Nova Premier';
+      return 'Nova Pro';
     } else if (normalizedType.includes('routing') || normalizedType.includes('classifier')) {
       return 'Nova Micro';
     } else if (normalizedType.includes('product') || normalizedType.includes('recommendation')) {

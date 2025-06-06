@@ -2,7 +2,9 @@ import { useAuthenticator } from "@aws-amplify/ui-react";
 import { TopNavigation } from "@cloudscape-design/components";
 import { applyMode, Mode } from "@cloudscape-design/global-styles";
 import { getCurrentUser } from "aws-amplify/auth";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
+import { FlashbarContext } from "../../../contexts/Flashbar";
+import { cleanupAllSubscriptions, setSigningOutState } from "../../../../utilities/authSubscriptionCleanup";
 import Favicon from "./favicon.png";
 
 const APP_NAME = "Multi-agent Collaboration";
@@ -20,6 +22,7 @@ const TopBar = () => {
 
     const { user, authStatus, signOut } = useAuthenticator((context) => [context.user]);
     const [authedUser, setAuthedUser] = useState<AuthedUser | null>(null);
+    const { addFlashbarItem } = useContext(FlashbarContext);
 
     useEffect(() => {
         localStorage.setItem("theme", theme);
@@ -29,23 +32,30 @@ const TopBar = () => {
     useEffect(() => {
         const currentAuthenticatedUser = async () => {
             try {
-                if (!user) {
-                    const { username, userId } = await getCurrentUser();
-                    setAuthedUser({
-                        userName: username,
-                        userID: userId,
-                    });
-                } else if (user.username) {
-                    // Removed Midway-specific condition
-                    setAuthedUser({
-                        userName: user.username,
-                        userID: user.userId,
-                    });
+                // Only try to get user info if currently authenticated
+                if (authStatus === "authenticated") {
+                    if (!user) {
+                        const { username, userId } = await getCurrentUser();
+                        setAuthedUser({
+                            userName: username,
+                            userID: userId,
+                        });
+                    } else if (user.username) {
+                        // Removed Midway-specific condition
+                        setAuthedUser({
+                            userName: user.username,
+                            userID: user.userId,
+                        });
+                    } else {
+                        setAuthedUser(null);
+                    }
                 } else {
+                    // Clear user data when not authenticated
                     setAuthedUser(null);
                 }
             } catch (error) {
-                console.log(error);
+                console.log("Authentication error:", error);
+                setAuthedUser(null);
             }
             return null;
         };
@@ -118,9 +128,22 @@ const TopBar = () => {
                         onItemClick: async ({ detail }) => {
                             if (detail.id === "signout") {
                                 try {
+                                    // Set signing out state to prevent subscription errors
+                                    setSigningOutState(true);
+                                    
+                                    // Clean up all active WebSocket subscriptions before signing out
+                                    cleanupAllSubscriptions();
+                                    
+                                    // Then perform the sign out
                                     await signOut();
+                                    
+                                    // Reset the signing out state
+                                    setSigningOutState(false);
                                 } catch (error) {
                                     console.log("Failed to sign out: ", error);
+                                    addFlashbarItem("error", "Sign out failed. Please try again.");
+                                    // Reset signing out state in case of error
+                                    setSigningOutState(false);
                                 }
                             }
                         },

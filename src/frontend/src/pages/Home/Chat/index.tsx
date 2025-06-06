@@ -28,6 +28,7 @@ import { containsProductContent, forceCompleteAllMessages } from '../../../utili
 import { performSessionRecovery } from '../../../utilities/sessionRecoveryUtils';
 import { resetFlowAnimations } from '../../../common/components/react_flow/FlowReset';
 import { resetProcessingState, toggleFlowAnimations, areFlowAnimationsFrozen, setFlowAnimationsFrozen, resetChatSession } from '../../../utilities/killSwitch';
+import { isSigningOutInProgress } from '../../../utilities/authSubscriptionCleanup';
 import { useTraceTimer } from './timerEffect';
 import { findTraceGroupByAgentId, getTraceGroupStartTime, parseAttributeAsNumber } from '../../../utilities/safeTraceUtils';
 import ActivityStatusLoader from './ActivityStatusLoader';
@@ -881,10 +882,36 @@ const Chat = () => {
                 },
                 error: (error) => {
                     console.error("Error in chat subscription:", error);
+                    
+                    // Reset loading state and current response ID
                     setIsLoading(false);
                     setCurrentResponseId(null);
                     setConnectionStatus("disconnected");
+                    
+                    // Check if the error occurred during sign-out process
+                    // If so, suppress the error notification
+                    if (isSigningOutInProgress()) {
+                        console.log("Subscription error during sign-out - suppressing notification");
+                        return;
+                    }
+                    
+                    // Only show error message if not during sign-out
                     addFlashbarItem("error", "Error in chat subscription. Please try again.");
+                    
+                    // Attempt automatic reconnection if applicable
+                    // This helps recover from temporary network issues
+                    setTimeout(() => {
+                        if (sessionId && document.visibilityState === 'visible') {
+                            console.log("Attempting automatic reconnection after subscription error");
+                            const connId = generateConnectionId(sessionId);
+                            
+                            // Dispatch reconnection event
+                            const reconnectEvent = new CustomEvent('subscriptionReconnect', {
+                                detail: { connId, timestamp: Date.now() }
+                            });
+                            document.dispatchEvent(reconnectEvent);
+                        }
+                    }, 3000); // Wait 3 seconds before attempting reconnection
                 },
             });
 

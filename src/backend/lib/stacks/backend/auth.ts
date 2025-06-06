@@ -30,10 +30,11 @@ export class Auth extends Construct {
         const { urls, hydrationFunction } = props;
 
         const userPool = new LabsUserPool(this, "userPool", {
-            selfSignUpEnabled: true, // Enable self sign-up for standard Cognito auth
+            selfSignUpEnabled: false, // Disable self sign-up, only allow admins to create users
             signInAliases: {
                 phone: false,
                 email: true, // Enable email sign-in
+                username: true, // Enable username sign-in
             },
             autoVerify: {
                 email: true,

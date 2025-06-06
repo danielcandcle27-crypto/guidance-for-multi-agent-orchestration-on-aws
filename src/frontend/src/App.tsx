@@ -1,6 +1,6 @@
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import "@aws-amplify/ui-react/styles.css";
-import { Spinner } from "@cloudscape-design/components";
+import { Container, Spinner } from "@cloudscape-design/components";
 import { I18nProvider } from "@cloudscape-design/components/i18n";
 import messages from "@cloudscape-design/components/i18n/messages/all.en";
 import "@cloudscape-design/global-styles/index.css";
@@ -8,6 +8,7 @@ import "./common/components/styles/chat-bubble-fixes.css"; // Fix for chat bubbl
 import { Amplify } from "aws-amplify";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { FlashbarProvider } from "./common/contexts/Flashbar";
 // Import our automatic localStorage cleanup utility for initialization
 import "./utilities/localStorageCleanup"; // This will auto-initialize when imported
@@ -56,7 +57,7 @@ console.log("Environment variables loaded:", {
 });
 
 // Use the environment variable for the AppSync URL
-const graphApiUrl = import.meta.env.VITE_GRAPH_API_URL || "https://YOUR-API-ID-HERE.appsync-api.YOUR-REGION-HERE.amazonaws.com/graphql";
+const graphApiUrl = import.meta.env.VITE_GRAPH_API_URL;
 
 // Force diag log mode
 const diagMode = true;
@@ -143,6 +144,60 @@ console.log("Amplify configured with GraphQL endpoint:", graphApiUrl);
 
 export default function App() {
     const { authStatus } = useAuthenticator((context) => [context.authStatus]);
+    const [isTransitioning, setIsTransitioning] = useState(false);
+    const prevAuthStatusRef = useRef(authStatus);
+    
+    // Track authentication state changes to handle transitions
+    useEffect(() => {
+        if (prevAuthStatusRef.current !== authStatus) {
+            console.log(`Auth status changed: ${prevAuthStatusRef.current} -> ${authStatus}`);
+            
+            // Handle transition from authenticated to unauthenticated (sign-out)
+            if (prevAuthStatusRef.current === "authenticated" && authStatus === "unauthenticated") {
+                console.log("Sign-out detected - showing transition spinner");
+                setIsTransitioning(true);
+                
+                // Clear transition state after a longer delay to ensure clean page transition
+                const timer = setTimeout(() => {
+                    setIsTransitioning(false);
+                    // Force a window reload after sign-out to ensure a clean authentication state
+                    // This prevents lingering subscriptions and auth errors
+                    // Only do this if we're not already on the login page
+                    if (window.location.pathname !== "/login") {
+                        console.log("Redirecting to login page after sign-out");
+                        window.location.href = "/";
+                    }
+                }, 1500);
+                
+                return () => clearTimeout(timer);
+            } 
+            // Handle other transitions (authenticated to authenticated, unauthenticated to authenticated)
+            else if (prevAuthStatusRef.current === "authenticated" || prevAuthStatusRef.current === "unauthenticated") {
+                setIsTransitioning(true);
+                
+                // Clear transition state after a delay to ensure router has time to update
+                const timer = setTimeout(() => {
+                    setIsTransitioning(false);
+                }, 1000);
+                
+                return () => clearTimeout(timer);
+            }
+            
+            // Also set transitioning if we just completed authentication
+            if (authStatus === "authenticated" && prevAuthStatusRef.current === "configuring") {
+                console.log("Auth completed - showing transition spinner to prevent blank screen");
+                setIsTransitioning(true);
+                
+                const timer = setTimeout(() => {
+                    setIsTransitioning(false);
+                }, 500);
+                
+                return () => clearTimeout(timer);
+            }
+        }
+        
+        prevAuthStatusRef.current = authStatus;
+    }, [authStatus]);
 
     // Common routes available to both authenticated and unauthenticated users
     const commonRoutes = [
@@ -181,19 +236,33 @@ export default function App() {
         ...commonRoutes
     ];
 
-    const router = createBrowserRouter(authStatus === "authenticated" ? privateRoutes : publicRoutes);
+    // Create the router based on auth status
+    const router = useMemo(() => {
+        console.log(`Creating router with auth status: ${authStatus}`);
+        return createBrowserRouter(authStatus === "authenticated" ? privateRoutes : publicRoutes);
+    }, [authStatus]);
 
-    // Load Cloudscape styles early to ensure they're available
+    // Render loading spinner during auth configuration or transitions
+    if (authStatus === "configuring" || isTransitioning) {
+        return (
+            <div style={{ 
+                display: "flex", 
+                justifyContent: "center", 
+                alignItems: "center", 
+                height: "100vh",
+                textAlign: "center"
+            }}>
+                <Spinner size="large" />
+            </div>
+        );
+    }
+
+    // Render the main application when authentication status is stable
     return (
-        <div>
-            {authStatus === "configuring" && <Spinner />}
-            {(authStatus === "authenticated" || authStatus === "unauthenticated") && (
-                <I18nProvider locale={LOCALE} messages={[messages]}>
-                    <FlashbarProvider>
-                        <RouterProvider router={router} />
-                    </FlashbarProvider>
-                </I18nProvider>
-            )}
-        </div>
+        <I18nProvider locale={LOCALE} messages={[messages]}>
+            <FlashbarProvider>
+                <RouterProvider router={router} />
+            </FlashbarProvider>
+        </I18nProvider>
     );
 }
