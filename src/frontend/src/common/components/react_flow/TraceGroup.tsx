@@ -298,7 +298,7 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     } else if (normalizedType.includes('product') || normalizedType.includes('recommendation')) {
       return 'Nova Lite';
     } else if (normalizedType.includes('trouble')) {
-      return 'Claude 3 Opus';
+      return 'Claude 3 Haiku';
     } else if (normalizedType.includes('personal')) {
       return 'Nova Micro';
     } else if (normalizedType.includes('order') || normalizedType.includes('management')) {

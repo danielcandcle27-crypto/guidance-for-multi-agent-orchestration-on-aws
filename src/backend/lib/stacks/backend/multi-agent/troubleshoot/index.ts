@@ -120,11 +120,11 @@ export class TroubleshootSubAgent extends Construct {
             checkIntervalHours: 24
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_OPUS_V1_0;
+        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0;
 
         const troubleshootAgent = new Agent(this, "troubleshootAgent", {
             //name: "TroubleshootAgent-" + Date.now(), 
-            foundationModel: model, // Using model directly instead of inference profile since Claude 3 Opus doesn't support profiles
+            foundationModel: model, // Using model directly instead of inference profile since Claude 3 Haiku doesn't support profiles
             instruction: readFileSync(path.join(__dirname, "instructions.txt"), "utf-8"),
             knowledgeBases: [troubleshootKnowledgeBase],
             userInputEnabled: true,
