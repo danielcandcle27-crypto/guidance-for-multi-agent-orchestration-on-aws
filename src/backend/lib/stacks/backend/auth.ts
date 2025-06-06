@@ -34,6 +34,7 @@ export class Auth extends Construct {
             signInAliases: {
                 phone: false,
                 email: true, // Enable email sign-in
+                username: true, // Enable username sign-in
             },
             autoVerify: {
                 email: true,
