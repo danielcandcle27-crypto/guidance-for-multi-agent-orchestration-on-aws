@@ -194,7 +194,7 @@ export class TroubleshootSubAgent extends Construct {
             agentAlias: troubleshootAgentAlias,
             collaborationInstruction: "Route troubleshoot questions to this agent.",
             collaboratorName: "Troubleshoot",
-            relayConversationHistory: false,
+            relayConversationHistory: true,
         });
 
         this.agentCollaborator = troubleshootAgentCollaborator;

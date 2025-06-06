@@ -77,7 +77,7 @@ export class OrderManagementSubAgent extends Construct {
             agentAlias: orderManagementAgentAlias,
             collaborationInstruction: "Route order management questions to this agent.",
             collaboratorName: "OrderManagement",
-            relayConversationHistory: false
+            relayConversationHistory: true
         });
 
         this.agentCollaborator = orderManagementAgentCollaborator;
