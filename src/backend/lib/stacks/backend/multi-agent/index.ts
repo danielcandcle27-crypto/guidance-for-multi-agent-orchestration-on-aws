@@ -174,7 +174,7 @@ export class MultiAgent extends Construct {
         console.log(`Deploying in region: ${currentRegion}`);
         
         // Define the models we might use
-        const novaProModel = BedrockFoundationModel.AMAZON_NOVA_PRO_V1;
+        const novaProModel = BedrockFoundationModel.AMAZON_TITAN_PREMIER_V1_0;
         const claudeModel = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_7_SONNET_V1_0;
         
         let supervisorAgent: Agent;

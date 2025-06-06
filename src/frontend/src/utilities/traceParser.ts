@@ -90,13 +90,13 @@ export function getModelLabelForTrace(traceType: string): string {
   switch (traceType) {
     case AGENT_TYPES.SUPERVISOR:
     case 'Supervisor':
-      return 'Nova Pro';
+      return 'Nova Premier';
     case AGENT_TYPES.PRODUCT_RECOMMENDATION:
     case 'ProductRecommendation':
       return 'Nova Lite';
     case AGENT_TYPES.TROUBLESHOOT:
     case 'Troubleshoot':
-      return 'DeepSeek-R1';
+      return 'Titan Text G1 Express';
     case AGENT_TYPES.PERSONALIZATION:
     case 'Personalization':
       return 'Claude Sonnet 3.7 v1';
@@ -559,8 +559,8 @@ function getStepTitle(traceContent: any): string {
     }
   }
 
-  // Default if no specific type found
-  return "Processing";
+  // Default if no specific type found - return empty string instead of "Processing" to prevent these from appearing
+  return "";
 }
 
 // Helper function to determine model invocation operation type
@@ -591,7 +591,7 @@ function getKnowledgeBaseOperationType(traceContent: any): string | null {
     return "Knowledge Base Query";  // Consistently use "Query" instead of "Input"
   }
   if (traceContent.trace.orchestrationTrace.observation?.knowledgeBaseLookupOutput) {
-    return "Knowledge Base Results";  // Consistently use "Results" instead of "Output"
+    return "Knowledge Base Response";  // Changed from "Results" to "Response" for consistency
   }
   
   return null;
@@ -1300,20 +1300,20 @@ export function processTraceData(
           subtaskType = subtaskType || "Model Operation";
         }
           
-        // Special handling for Knowledge Base Results to ensure they're paired with queries
-        if (knowledgeBaseType === "Knowledge Base Results") {
-          console.log('Found Knowledge Base Results trace - looking for a parent KB Tool task');
+        // Special handling for Knowledge Base Response to ensure they're paired with queries
+        if (knowledgeBaseType === "Knowledge Base Response") {
+          console.log('Found Knowledge Base Response trace - looking for a parent KB Tool task');
           
           // Use the dedicated function to find KB parent
           const kbParentIndex = findKnowledgeBaseParentTask(existingTraceGroup.tasks, agentId);
           
           if (kbParentIndex >= 0) {
-            console.log(`Found Knowledge Base parent at index ${kbParentIndex} for KB Results`);
+            console.log(`Found Knowledge Base parent at index ${kbParentIndex} for KB Response`);
             parentTaskIndex = kbParentIndex;
-            subtaskType = "Knowledge Base Response"; // Use "Response" instead of "Results" for clearer UI
+            subtaskType = "Knowledge Base Response"; 
             // Skip the regular parent task search since we've found a specific KB parent
           } else {
-            console.log('No suitable Knowledge Base parent found for KB Results');
+            console.log('No suitable Knowledge Base parent found for KB Response');
             // Continue with regular parent task search
           }
         }

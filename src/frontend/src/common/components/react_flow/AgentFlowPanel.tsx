@@ -226,24 +226,7 @@ export const AgentFlowPanel: React.FC<AgentFlowPanelProps> = ({ height = '100%',
     traceGroup: null as TraceGroup | null,
     nodeDescription: ''
   });
-  const [interactionEnabled, setInteractionEnabled] = useState<boolean>(false);
-
-  // States for the processing indicator
-  const [processingIndicator, setProcessingIndicator] = useState({
-    isVisible: false,
-    sourceNodeId: null as string | null,
-    targetNodeId: null as string | null,
-    sourceNodePosition: null as { x: number; y: number } | null,
-    targetNodePosition: null as { x: number; y: number } | null,
-    message: 'Processing...',
-    // Processing state tracking
-    isQueryActive: false,
-    activeAgents: new Set<string>(),
-    processingStartTime: 0,
-    // Current step in the processing sequence
-    currentStep: 0,
-    totalSteps: 0
-  });
+ 
 
   // Add ref for React Flow instance
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);

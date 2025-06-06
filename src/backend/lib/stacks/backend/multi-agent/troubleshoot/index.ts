@@ -120,7 +120,7 @@ export class TroubleshootSubAgent extends Construct {
             checkIntervalHours: 24
         });
 
-        const model = BedrockFoundationModel.DEEPSEEK_R1_V1 ;
+        const model = BedrockFoundationModel.AMAZON_TITAN_TEXT_EXPRESS_V1;
 
         const troubleshootInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,

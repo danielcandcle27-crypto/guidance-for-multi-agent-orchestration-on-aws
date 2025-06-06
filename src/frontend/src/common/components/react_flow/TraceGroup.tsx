@@ -261,15 +261,6 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     }));
   };
 
-  // Helper to check if a subtask title matches certain patterns
-  const isActionGroupInput = (title: string) => title.toLowerCase().includes('action group input');
-  const isActionGroupOutput = (title: string) => title.toLowerCase().includes('action group output') || 
-                                               title.toLowerCase().includes('action group result');
-  const isKnowledgeBaseInput = (title: string) => title.toLowerCase().includes('knowledge base input') || 
-                                                title.toLowerCase().includes('knowledge base query');
-  const isKnowledgeBaseOutput = (title: string) => title.toLowerCase().includes('knowledge base output') || 
-                                                 title.toLowerCase().includes('knowledge base results');
-
   // Get the relevant information from the processed trace group
   // Extract agent name and hardcode LLM for each agent type
   // Get the agent type directly from the trace - this is the key fix to ensure proper naming
@@ -301,13 +292,13 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     const normalizedType = agentType.toLowerCase();
     
     if (normalizedType.includes('super') || normalizedType === 'supervisor') {
-      return 'Nova Pro';
+      return 'Nova Premier';
     } else if (normalizedType.includes('routing') || normalizedType.includes('classifier')) {
       return 'Nova Micro';
     } else if (normalizedType.includes('product') || normalizedType.includes('recommendation')) {
       return 'Nova Lite';
     } else if (normalizedType.includes('trouble')) {
-      return 'DeepSeek-R1';
+      return 'Titan Text G1 Express';
     } else if (normalizedType.includes('personal')) {
       return 'Claude Sonnet 3.7 v1';
     } else if (normalizedType.includes('order') || normalizedType.includes('management')) {
