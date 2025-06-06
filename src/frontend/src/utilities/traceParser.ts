@@ -898,6 +898,44 @@ function findModelInvocationParentTask(tasks: Task[], agentId: string, forOutput
   return -1;
 }
 
+// Helper function to find a Knowledge Base parent task for results
+function findKnowledgeBaseParentTask(tasks: Task[], agentId: string): number {
+  // Look for a suitable "Knowledge Base Tool" parent task, starting from the most recent
+  for (let i = tasks.length - 1; i >= 0; i--) {
+    const task = tasks[i];
+    if ((task.title.includes("Knowledge Base Tool") || task.title.includes("Knowledge Base")) && 
+        (task._agentId === agentId || !task._agentId)) {
+      
+      // When looking for a parent for KB Results, find a task that already has KB Query
+      // but doesn't have KB Results/Response yet
+      if (task.subTasks && 
+          task.subTasks.some(st => st.title.includes("Knowledge Base Query")) &&
+          !task.subTasks.some(st => 
+            st.title.includes("Knowledge Base Results") || 
+            st.title.includes("Knowledge Base Response"))) {
+        console.log(`Found existing Knowledge Base parent with Query but no Results yet at index ${i}`);
+        return i;
+      }
+      
+      // If no subtasks with KB Query exist yet, but it's a KB Tool task, it's a candidate
+      if ((!task.subTasks || task.subTasks.length === 0) && 
+          task.title.includes("Knowledge Base Tool")) {
+        console.log(`Found empty Knowledge Base Tool parent at index ${i}`);
+        return i;
+      }
+      
+      // If it has a KB Query but no Results yet, it's a good candidate
+      if (task.subTasks && task.subTasks.some(st => st.title.includes("Knowledge Base Query"))) {
+        console.log(`Found Knowledge Base parent with Query at index ${i}`);
+        return i;
+      }
+    }
+  }
+  
+  // No suitable parent found
+  return -1;
+}
+
 // Classify a trace item to determine if it should be a subtask
 function isSubtaskTrace(traceType: string, stepTitle: string): boolean {
   // These are parent task titles - they should be top-level steps
@@ -1262,50 +1300,71 @@ export function processTraceData(
           subtaskType = subtaskType || "Model Operation";
         }
           
-        // Look for a relevant parent task, which should be recently added
-        for (let i = existingTraceGroup.tasks.length - 1; i >= 0; i--) {
-          const task = existingTraceGroup.tasks[i];
+        // Special handling for Knowledge Base Results to ensure they're paired with queries
+        if (knowledgeBaseType === "Knowledge Base Results") {
+          console.log('Found Knowledge Base Results trace - looking for a parent KB Tool task');
           
-          // For model invocation subtasks, we need special handling
-          if (modelInvocationType || stepTitle === "Invoking Model") {
-            // Always ensure model operations create a new task or go under an existing Invoking Model
-            // Never nest them under other types like Action Group or Knowledge Base
-            if (task.title.includes("Invoking Model")) {
-              console.log(`Found Model Invocation parent task: ${task.title} for model operation`);
-              parentTaskIndex = i;
-              subtaskType = subtaskType || "Model Operation";
-              break;
-            } else {
-              // If this is a model trace but there's no Invoking Model parent recently,
-              // don't attach it as a subtask to anything else - force it to be a new task
-              console.log(`No suitable Model Invocation parent found - creating new task for model operation`);
-              parentTaskIndex = -1; // Force creation of a new task
-              break;  // Exit the loop - we don't want to find any other parent
+          // Use the dedicated function to find KB parent
+          const kbParentIndex = findKnowledgeBaseParentTask(existingTraceGroup.tasks, agentId);
+          
+          if (kbParentIndex >= 0) {
+            console.log(`Found Knowledge Base parent at index ${kbParentIndex} for KB Results`);
+            parentTaskIndex = kbParentIndex;
+            subtaskType = "Knowledge Base Response"; // Use "Response" instead of "Results" for clearer UI
+            // Skip the regular parent task search since we've found a specific KB parent
+          } else {
+            console.log('No suitable Knowledge Base parent found for KB Results');
+            // Continue with regular parent task search
+          }
+        }
+        
+        // If we haven't found a parent task yet, look for a relevant one
+        if (parentTaskIndex < 0) {
+          // Look for a relevant parent task, which should be recently added
+          for (let i = existingTraceGroup.tasks.length - 1; i >= 0; i--) {
+            const task = existingTraceGroup.tasks[i];
+            
+            // For model invocation subtasks, we need special handling
+            if (modelInvocationType || stepTitle === "Invoking Model") {
+              // Always ensure model operations create a new task or go under an existing Invoking Model
+              // Never nest them under other types like Action Group or Knowledge Base
+              if (task.title.includes("Invoking Model")) {
+                console.log(`Found Model Invocation parent task: ${task.title} for model operation`);
+                parentTaskIndex = i;
+                subtaskType = subtaskType || "Model Operation";
+                break;
+              } else {
+                // If this is a model trace but there's no Invoking Model parent recently,
+                // don't attach it as a subtask to anything else - force it to be a new task
+                console.log(`No suitable Model Invocation parent found - creating new task for model operation`);
+                parentTaskIndex = -1; // Force creation of a new task
+                break;  // Exit the loop - we don't want to find any other parent
+              }
             }
-          }
-          // For action group subtasks, find a matching action group parent
-          else if (actionGroupType && (
-              task.title.includes("Action Group Tool") || 
-              task.title.includes("Action Group ")
-            )) {
-            console.log(`Found Action Group parent task: ${task.title} for subtask: ${subtaskType}`);
-            parentTaskIndex = i;
-            break;
-          }
-          // For knowledge base subtasks, find a matching knowledge base parent
-          else if (knowledgeBaseType && (
-              task.title.includes("Knowledge Base") || 
-              task.title.includes("Knowledge Base Tool")
-            )) {
-            console.log(`Found Knowledge Base parent task: ${task.title} for subtask: ${subtaskType}`);
-            parentTaskIndex = i;
-            break;
-          }
-          // Default fallback - any task with a step number
-          else if (task.stepNumber > 0) {
-            // Found a suitable parent task
-            parentTaskIndex = i;
-            break;
+            // For action group subtasks, find a matching action group parent
+            else if (actionGroupType && (
+                task.title.includes("Action Group Tool") || 
+                task.title.includes("Action Group ")
+              )) {
+              console.log(`Found Action Group parent task: ${task.title} for subtask: ${subtaskType}`);
+              parentTaskIndex = i;
+              break;
+            }
+            // For knowledge base subtasks, find a matching knowledge base parent
+            else if (knowledgeBaseType && (
+                task.title.includes("Knowledge Base") || 
+                task.title.includes("Knowledge Base Tool")
+              )) {
+              console.log(`Found Knowledge Base parent task: ${task.title} for subtask: ${subtaskType}`);
+              parentTaskIndex = i;
+              break;
+            }
+            // Default fallback - any task with a step number
+            else if (task.stepNumber > 0) {
+              // Found a suitable parent task
+              parentTaskIndex = i;
+              break;
+            }
           }
         }
       } else {

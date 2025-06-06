@@ -92,6 +92,12 @@ export class MultiAgent extends Construct {
             loggingBucket,
         });
         
+        // Extract the bucket deployments from each subagent to use as dependencies later
+        // These are private properties, but we can access them through node.findChild
+        const personalizationKnowledgeDeployment = personalizationSubAgent.node.findChild('personalizationKnowledgeDeployment');
+        const productRecommendationKnowledgeDeployment = productRecommendationSubAgent.node.findChild('productRecommendationKnowledgeDeployment');
+        const troubleshootKnowledgeDeployment = troubleshootSubAgent.node.findChild('troubleshootKnowledgeDeployment');
+        
         // Collect knowledge base IDs from all subagents
         const knowledgeBaseIds = [
             personalizationSubAgent.knowledgeBaseId,
@@ -127,6 +133,7 @@ export class MultiAgent extends Construct {
         );
         
         // Create a custom resource to trigger immediate sync of all knowledge bases
+        // Ensure it only runs after all knowledge base deployments have completed
         const triggerKnowledgeBaseSync = new AwsCustomResource(this, 'TriggerKnowledgeBaseSync', {
             onCreate: {
                 service: 'Lambda',
@@ -144,6 +151,23 @@ export class MultiAgent extends Construct {
                 })
             ])
         });
+        
+        // Add explicit dependencies to ensure the custom resource waits for all knowledge base deployments
+        // This ensures that all knowledge bases and their data sources are fully created and available
+        if (personalizationKnowledgeDeployment) {
+            triggerKnowledgeBaseSync.node.addDependency(personalizationKnowledgeDeployment);
+        }
+        if (productRecommendationKnowledgeDeployment) {
+            triggerKnowledgeBaseSync.node.addDependency(productRecommendationKnowledgeDeployment);
+        }
+        if (troubleshootKnowledgeDeployment) {
+            triggerKnowledgeBaseSync.node.addDependency(troubleshootKnowledgeDeployment);
+        }
+        
+        // Also add dependencies on the knowledge bases themselves to ensure proper ordering
+        triggerKnowledgeBaseSync.node.addDependency(personalizationSubAgent);
+        triggerKnowledgeBaseSync.node.addDependency(productRecommendationSubAgent);
+        triggerKnowledgeBaseSync.node.addDependency(troubleshootSubAgent);
 
         // Determine the current deployment region
         const currentRegion = Stack.of(this).region;
