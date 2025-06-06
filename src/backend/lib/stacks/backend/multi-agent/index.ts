@@ -149,58 +149,88 @@ export class MultiAgent extends Construct {
         const currentRegion = Stack.of(this).region;
         console.log(`Deploying in region: ${currentRegion}`);
         
-        // Choose appropriate model and configuration based on region
-        let supervisorModel = BedrockFoundationModel.AMAZON_TITAN_PREMIER_V1_0;
+        // Define the models we might use
+        const novaProModel = BedrockFoundationModel.AMAZON_NOVA_PRO_V1;
+        const claudeModel = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_7_SONNET_V1_0;
         
-        // Check if deploying to us-east-1 and provide alternative model if needed
+        let supervisorAgent: Agent;
+        
+        // Special case for Titan Premier in us-east-1 (its home region)
         if (currentRegion === 'us-east-1') {
-            console.log('Using alternative model profile for us-east-1');
-            // Use an alternative model that works in us-east-1
-            // Replacing with Claude 3.7 Sonnet which has good availability across regions
-            supervisorModel = BedrockFoundationModel.AMAZON_TITAN_PREMIER_V1_0;
+            console.log('Deploying in us-east-1: Using direct model invocation for Titan Premier');
+            
+            // Create supervisor agent with direct model reference (no cross-region profile)
+            supervisorAgent = new Agent(this, "supervisorAgent", {
+                //name: "SupervisorAgent-" + Date.now(),            
+                foundationModel: novaProModel,
+                instruction: readFileSync(path.join(__dirname, "instructions.txt"), "utf-8"),
+                agentCollaboration: AgentCollaboratorType.SUPERVISOR,
+                agentCollaborators: [
+                    personalizationSubAgent.agentCollaborator,
+                    orderManagementSubAgent.agentCollaborator,
+                    productRecommendationSubAgent.agentCollaborator,
+                    troubleshootSubAgent.agentCollaborator,
+                ],
+            });
+            
+            // Grant direct permissions to invoke the model in us-east-1
+            supervisorAgent.role.addToPrincipalPolicy(
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: [
+                        "bedrock:InvokeModel",
+                        "bedrock:InvokeModelWithResponseStream",
+                        "bedrock:GetFoundationModel",
+                    ],
+                    resources: [
+                        `arn:aws:bedrock:${currentRegion}::foundation-model/${novaProModel.modelId}`,
+                    ],
+                })
+            );
         } else {
-            console.log('Using default Titan Premier model');
-        }
-        
-        const supervisorInferenceProfile = CrossRegionInferenceProfile.fromConfig({
-            geoRegion: CrossRegionInferenceProfileRegion.US,
-            model: supervisorModel,
-        });
+            console.log('Using cross-region inference profile for non-us-east-1 deployment');
+            
+            // For other regions, use cross-region inference profile
+            const supervisorInferenceProfile = CrossRegionInferenceProfile.fromConfig({
+                geoRegion: CrossRegionInferenceProfileRegion.US,
+                // Use Claude model for best cross-region support
+                model: claudeModel,
+            });
 
-        const supervisorAgent = new Agent(this, "supervisorAgent", {
-            //name: "SupervisorAgent-" + Date.now(),            
-            foundationModel: supervisorInferenceProfile,
-            instruction: readFileSync(path.join(__dirname, "instructions.txt"), "utf-8"),
-            agentCollaboration: AgentCollaboratorType.SUPERVISOR,
-            agentCollaborators: [
-                personalizationSubAgent.agentCollaborator,
-                orderManagementSubAgent.agentCollaborator,
-                productRecommendationSubAgent.agentCollaborator,
-                troubleshootSubAgent.agentCollaborator,
-            ],
-        });
-        // Grant standard permissions through inference profile
-        supervisorInferenceProfile.grantInvoke(supervisorAgent.role);
-        supervisorInferenceProfile.grantProfileUsage(supervisorAgent.role);
-        
-        // Add explicit permissions for the model based on region
-        supervisorAgent.role.addToPrincipalPolicy(
-            new PolicyStatement({
-                effect: Effect.ALLOW,
-                actions: [
-                    "bedrock:InvokeModel",
-                    "bedrock:InvokeModelWithResponseStream",
-                    "bedrock:GetInferenceProfile",
-                    "bedrock:GetFoundationModel",
+            supervisorAgent = new Agent(this, "supervisorAgent", {
+                //name: "SupervisorAgent-" + Date.now(),            
+                foundationModel: supervisorInferenceProfile,
+                instruction: readFileSync(path.join(__dirname, "instructions.txt"), "utf-8"),
+                agentCollaboration: AgentCollaboratorType.SUPERVISOR,
+                agentCollaborators: [
+                    personalizationSubAgent.agentCollaborator,
+                    orderManagementSubAgent.agentCollaborator,
+                    productRecommendationSubAgent.agentCollaborator,
+                    troubleshootSubAgent.agentCollaborator,
                 ],
-                resources: [
-                    // Include both possible models to ensure permissions work in all regions
-                    `arn:aws:bedrock:*::foundation-model/${BedrockFoundationModel.AMAZON_TITAN_PREMIER_V1_0.modelId}`,
-                    `arn:aws:bedrock:*::foundation-model/${BedrockFoundationModel.ANTHROPIC_CLAUDE_3_7_SONNET_V1_0.modelId}`,
-                    supervisorInferenceProfile.inferenceProfileArn,
-                ],
-            })
-        );
+            });
+            
+            // Grant standard permissions through inference profile
+            supervisorInferenceProfile.grantInvoke(supervisorAgent.role);
+            supervisorInferenceProfile.grantProfileUsage(supervisorAgent.role);
+            
+            // Add explicit permissions for cross-region model
+            supervisorAgent.role.addToPrincipalPolicy(
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: [
+                        "bedrock:InvokeModel",
+                        "bedrock:InvokeModelWithResponseStream",
+                        "bedrock:GetInferenceProfile",
+                        "bedrock:GetFoundationModel",
+                    ],
+                    resources: [
+                        `arn:aws:bedrock:*::foundation-model/${claudeModel.modelId}`,
+                        supervisorInferenceProfile.inferenceProfileArn,
+                    ],
+                })
+            );
+        }
 
         const supervisorAgentAlias = new AgentAlias(this, "supervisorAgentAlias", {
             agent: supervisorAgent,
