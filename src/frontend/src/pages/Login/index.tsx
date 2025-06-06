@@ -3,7 +3,7 @@ import { Authenticator } from "@aws-amplify/ui-react";
 const Login = () => {
     return (
         <Authenticator
-            hideSignUp={false} // Enable sign up with username
+            hideSignUp={true} // Prevent sign up, allowing only existing users to log in
             variation="modal"
             components={{
                 SignIn: {
@@ -11,25 +11,6 @@ const Login = () => {
                         // Removed Midway sign-in button
                         return null;
                     },
-                },
-                SignUp: {
-                    FormFields() {
-                        return (
-                            <>
-                                <Authenticator.SignUp.FormFields />
-                            </>
-                        );
-                    },
-                },
-            }}
-            services={{
-                async validateCustomSignUp(formData) {
-                    if (!formData.username) {
-                        return {
-                            username: "Username is required",
-                        };
-                    }
-                    return {};
                 },
             }}
         />
