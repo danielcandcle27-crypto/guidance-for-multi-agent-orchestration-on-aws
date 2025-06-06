@@ -253,19 +253,22 @@ export class Storage extends Construct {
             physicalResourceId: PhysicalResourceId.of(`forced-deletion-${id}`),
         };
         
-        // For creation and updates, directly use a safer approach to avoid the hardcoded bucket name issue
-        // Instead of Athena, we use a simpler API call that doesn't depend on a specific bucket
+        // For creation and updates, use actual Athena query execution
         const executeQueryCall: AwsSdkCall = {
-            // Use a more reliable AWS API call that doesn't depend on specific resources
-            // This completely avoids S3 bucket or DynamoDB dependencies
-            service: 'STS',
-            action: 'getCallerIdentity',
-            parameters: {},
-            // Instead of basing physical ID on the query execution which can fail,
-            // use a fully deterministic ID that doesn't depend on operation success
-            physicalResourceId: PhysicalResourceId.of(`fixed-${id}-${queryHash}`),
-            // Catch errors for non-existent tables - we don't actually need the table to exist
-            ignoreErrorCodesMatching: 'ResourceNotFoundException',
+            service: 'Athena',
+            action: 'startQueryExecution',
+            parameters: {
+                QueryString: query,
+                QueryExecutionContext: {
+                    Database: query.includes('DROP TABLE') ? 'order_management' : 'order_management'
+                },
+                ResultConfiguration: {
+                    OutputLocation: `s3://${resultsBucket.bucketName}/athena-results/`
+                }
+            },
+            physicalResourceId: PhysicalResourceId.of(`athena-query-${id}-${queryHash}`),
+            // Use a unique queryId to track this query execution
+            outputPaths: ['QueryExecutionId']
         };
         
         // Create the custom resource with better error handling and a simpler delete operation
