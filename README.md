@@ -143,10 +143,8 @@ We recommend creating a [Budget](https://docs.aws.amazon.com/cost-management/lat
 ### Model access
 
 Navigate to the Amazon Bedrock console, and enable the following models: 
-`Titan Embeddings G1 - Text`
 `Cohere Embed English V3`
 `Nova Premier`
-`Titan Text G1 Express`
 `Nova Pro`
 `Nova Lite`
 `Nova Micro`

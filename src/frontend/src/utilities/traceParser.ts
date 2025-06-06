@@ -96,7 +96,7 @@ export function getModelLabelForTrace(traceType: string): string {
       return 'Nova Lite';
     case AGENT_TYPES.TROUBLESHOOT:
     case 'Troubleshoot':
-      return 'Titan Text G1 Express';
+      return 'Claude 3 Opus';
     case AGENT_TYPES.PERSONALIZATION:
     case 'Personalization':
       return 'Nova Micro';
