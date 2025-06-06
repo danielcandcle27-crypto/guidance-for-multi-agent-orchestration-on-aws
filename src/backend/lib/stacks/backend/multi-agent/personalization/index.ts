@@ -142,7 +142,7 @@ export class PersonalizationSubAgent extends Construct {
             ),
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_7_SONNET_V1_0;
+        const model = BedrockFoundationModel.AMAZON_NOVA_MICRO_V1;
 
         const personalizationInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,

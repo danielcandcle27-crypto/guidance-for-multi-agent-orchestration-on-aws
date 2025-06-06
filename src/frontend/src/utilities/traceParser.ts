@@ -99,7 +99,7 @@ export function getModelLabelForTrace(traceType: string): string {
       return 'Titan Text G1 Express';
     case AGENT_TYPES.PERSONALIZATION:
     case 'Personalization':
-      return 'Claude Sonnet 3.7 v1';
+      return 'Nova Micro';
     case AGENT_TYPES.ORDER_MANAGEMENT:
     case 'OrderManagement':
       return 'Claude 3.5 Haiku';

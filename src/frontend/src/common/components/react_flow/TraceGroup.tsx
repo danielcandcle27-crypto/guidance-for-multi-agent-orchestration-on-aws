@@ -300,7 +300,7 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     } else if (normalizedType.includes('trouble')) {
       return 'Titan Text G1 Express';
     } else if (normalizedType.includes('personal')) {
-      return 'Claude Sonnet 3.7 v1';
+      return 'Nova Micro';
     } else if (normalizedType.includes('order') || normalizedType.includes('management')) {
       return 'Claude 3.5 Haiku';
     }

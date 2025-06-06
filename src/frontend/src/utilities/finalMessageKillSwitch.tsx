@@ -280,6 +280,12 @@ export function dispatchFinalMessageDetected(content: string, traceData?: any) {
     return Promise.resolve(); // Skip processing this event
   }
   
+  // CRITICAL FIX: Check if processing is already complete to prevent duplicate events
+  if (typeof window !== 'undefined' && window.__processingComplete) {
+    console.log(`⚠️ Processing is already complete - skipping finalMessageDetected event`);
+    return Promise.resolve(); // Skip processing this event
+  }
+  
   // First ensure we stop all animations in progress
   document.dispatchEvent(new Event('stopAllTextAnimations'));
   
@@ -310,6 +316,19 @@ export function dispatchFinalMessageRendered(content: string, traceData?: any) {
   // Check if this event is stale (from before the last reset)
   if (eventTimestamp < lastSessionResetTime) {
     console.log(`⚠️ Skipping finalMessageRendered event - it's from before the last session reset`);
+    return; // Skip processing this event
+  }
+  
+  // CRITICAL FIX: Check if processing is already complete to prevent duplicate events
+  if (typeof window !== 'undefined' && window.__processingComplete) {
+    console.log(`⚠️ Processing is already complete - skipping finalMessageRendered event`);
+    
+    // Clear trace cache to prevent reprocessing loops
+    try {
+      localStorage.removeItem('agent-trace-cache');
+    } catch (e) {
+      console.error("Error clearing trace cache:", e);
+    }
     return; // Skip processing this event
   }
   
