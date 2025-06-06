@@ -195,7 +195,7 @@ export class ProductRecommendationSubAgent extends Construct {
             agentAlias: productRecommendationAgentAlias,
             collaborationInstruction: "Expert in suggesting relevant products based on customer needs.",
             collaboratorName: "ProductRecommendation",
-            relayConversationHistory: true,
+            relayConversationHistory: false,
         });
 
         this.agentCollaborator = productRecommendationAgentCollaborator;

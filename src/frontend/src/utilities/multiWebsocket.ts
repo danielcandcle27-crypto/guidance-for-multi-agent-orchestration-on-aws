@@ -6,8 +6,8 @@ interface MessageHandler {
   handler: (data: any) => void;
 }
 
-// Store connections by session ID
-const connections: Record<string, WebSocket> = {};
+// Store connections by session ID - exported for cleanup during sign-out
+export const connections: Record<string, WebSocket> = {};
 
 // Store message handlers by connection ID
 const handlers: Record<string, MessageHandler[]> = {};

@@ -157,7 +157,7 @@ export class MultiAgent extends Construct {
             console.log('Using alternative model profile for us-east-1');
             // Use an alternative model that works in us-east-1
             // Replacing with Claude 3.7 Sonnet which has good availability across regions
-            supervisorModel = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_7_SONNET_V1_0;
+            supervisorModel = BedrockFoundationModel.AMAZON_TITAN_PREMIER_V1_0;
         } else {
             console.log('Using default Titan Premier model');
         }
@@ -171,7 +171,7 @@ export class MultiAgent extends Construct {
             //name: "SupervisorAgent-" + Date.now(),            
             foundationModel: supervisorInferenceProfile,
             instruction: readFileSync(path.join(__dirname, "instructions.txt"), "utf-8"),
-            agentCollaboration: AgentCollaboratorType.SUPERVISOR_ROUTER,
+            agentCollaboration: AgentCollaboratorType.SUPERVISOR,
             agentCollaborators: [
                 personalizationSubAgent.agentCollaborator,
                 orderManagementSubAgent.agentCollaborator,
