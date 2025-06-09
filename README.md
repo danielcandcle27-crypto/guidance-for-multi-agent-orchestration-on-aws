@@ -144,12 +144,11 @@ We recommend creating a [Budget](https://docs.aws.amazon.com/cost-management/lat
 
 Navigate to the Amazon Bedrock console, and enable the following models: 
 `Cohere Embed English V3`
-`Nova Premier`
 `Nova Pro`
 `Nova Lite`
 `Nova Micro`
 `Sonnet 3.5 V1`
-`Claude 3 Opus`
+`Claude 3 Haiku`
 `Sonnet 3.5 V2`
 `Haiku 3.5 V1`
 

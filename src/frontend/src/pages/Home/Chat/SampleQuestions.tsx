@@ -14,7 +14,7 @@ const SampleQuestions: React.FC<SampleQuestionsProps> = ({ onQuestionClick }) =>
     {
       id: "product-recommendations",
       title: "Product Inquiry & Customer Feedback",
-      text: "I like expensive, good quality phones. What is the best phone you have, and what are the comments that people say about this product? - Logged in as cust010 (new request)",
+      text: "I like good quality phones. What is the most expensive phone you have, and what are the comments that people say about this product? - Logged in as cust010 (new request)",
     },
     {
       id: "customer-preference",

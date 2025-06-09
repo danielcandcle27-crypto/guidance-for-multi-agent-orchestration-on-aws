@@ -33,6 +33,8 @@ interface PersonalizationSubAgentProps {
 export class PersonalizationSubAgent extends Construct {
     public readonly agentCollaborator: AgentCollaborator;
     public readonly knowledgeBaseId: string;
+    public readonly agent: Agent;
+    public readonly agentAlias: AgentAlias;
 
     constructor(scope: Construct, id: string, props: PersonalizationSubAgentProps) {
         super(scope, id);
@@ -177,7 +179,7 @@ export class PersonalizationSubAgent extends Construct {
             })
         );
 
-        const personalizationAgentAlias = new AgentAlias(this, "personalizationAgentAlias", {
+        const personalizationAgentAlias = new AgentAlias(this, "alias", {
             agent: personalizationAgent,
         });
 
@@ -190,5 +192,7 @@ export class PersonalizationSubAgent extends Construct {
 
         this.agentCollaborator = personalizationAgentCollaborator;
         this.knowledgeBaseId = personalizationKnowledgeBase.knowledgeBaseId;
+        this.agent = personalizationAgent;
+        this.agentAlias = personalizationAgentAlias;
     }
 }

@@ -1,4 +1,4 @@
-﻿order_id,customer_id,product_id,product_name,order_status,shipping_status,return_exchange_status,order_date,delivery_date
+order_id,customer_id,product_id,product_name,order_status,shipping_status,return_exchange_status,order_date,delivery_date
 o001,cust001,prod001,zensound wireless headphones,delivered,delivered,not returned,10/25/24 10:00,10/30/24 12:00
 o002,cust002,prod002,vitafit smartwatch,shipped,in transit,not returned,10/28/24 14:00,11/3/24 16:00
 o003,cust003,prod003,promax laptop,delivered,delivered,returned,10/20/24 9:30,10/25/24 18:00

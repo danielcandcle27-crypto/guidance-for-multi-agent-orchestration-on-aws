@@ -22,6 +22,8 @@ interface OrderManagementSubAgentProps {
 
 export class OrderManagementSubAgent extends Construct {
     public readonly agentCollaborator: AgentCollaborator;
+    public readonly agent: Agent;
+    public readonly agentAlias: AgentAlias;
 
     constructor(scope: Construct, id: string, props: OrderManagementSubAgentProps) {
         super(scope, id);
@@ -69,7 +71,7 @@ export class OrderManagementSubAgent extends Construct {
             })
         );
 
-        const orderManagementAgentAlias = new AgentAlias(this, "orderManagementAgentAlias", {
+        const orderManagementAgentAlias = new AgentAlias(this, "alias", {
             agent: orderManagementAgent
         });
 
@@ -81,5 +83,7 @@ export class OrderManagementSubAgent extends Construct {
         });
 
         this.agentCollaborator = orderManagementAgentCollaborator;
+        this.agent = orderManagementAgent;
+        this.agentAlias = orderManagementAgentAlias;
     }
 }
