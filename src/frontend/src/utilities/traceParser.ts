@@ -93,7 +93,7 @@ export function getModelLabelForTrace(traceType: string): string {
       return 'Nova Premier';
     case AGENT_TYPES.PRODUCT_RECOMMENDATION:
     case 'ProductRecommendation':
-      return 'Nova Lite';
+      return 'Claude 3 Sonnet';
     case AGENT_TYPES.TROUBLESHOOT:
     case 'Troubleshoot':
       return 'Claude 3 Haiku';

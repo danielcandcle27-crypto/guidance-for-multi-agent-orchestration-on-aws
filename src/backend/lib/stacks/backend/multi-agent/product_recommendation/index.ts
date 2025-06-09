@@ -150,7 +150,7 @@ export class ProductRecommendationSubAgent extends Construct {
             ),
         });
 
-        const model = BedrockFoundationModel.AMAZON_NOVA_LITE_V1;
+        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_SONNET_V1_0;
 
         const productRecommendationInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,
