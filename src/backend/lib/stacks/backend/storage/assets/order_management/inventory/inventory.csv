@@ -1,4 +1,4 @@
-﻿product_id,product_name,category,quantity,in_stock,reorder_threshold,reorder_quantity,last_restock_date
+product_id,product_name,category,quantity,in_stock,reorder_threshold,reorder_quantity,last_restock_date
 p001,zensound wireless headphones,headphones,150,yes,50,100,10/1/24
 p002,vitafit smartwatch,watch,75,yes,30,50,10/5/24
 p004,sonicwave bluetooth speaker,speaker,200,yes,70,100,9/25/24

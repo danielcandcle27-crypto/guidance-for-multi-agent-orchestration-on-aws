@@ -4,6 +4,13 @@ import Box from "@cloudscape-design/components/box";
 import { TraceGroup as TraceGroupType } from '../../../utilities/traceParser';
 import { getSafeTraceGroups, getNewestTraceGroup } from '../../../utilities/safeTraceUtils';
 
+// Extend Window interface for debug flags
+declare global {
+  interface Window {
+    __chatDebugMode?: boolean;
+  }
+}
+
 interface ActivityStatusLoaderProps {
   traceState: any;
   isLoading: boolean;
@@ -32,8 +39,10 @@ const ActivityStatusLoader: React.FC<ActivityStatusLoaderProps> = ({ traceState,
     // Update the status text based on the latest trace activity
     if (!isLoading) return;
 
-    // Log when the loader is activated
-    console.log(`🔄 Activity loader ${instanceId.current} activated at ${new Date(mountTime).toLocaleTimeString()}`);
+    // Log when the loader is activated (debug mode only)
+    if (import.meta.env.DEV && window.__chatDebugMode) {
+      console.log(`🔄 Activity loader ${instanceId.current} activated at ${new Date(mountTime).toLocaleTimeString()}`);
+    }
 
     // Force update more frequently (every 100ms) to keep up with trace updates
     // This makes the loader much more responsive to changes
@@ -46,7 +55,9 @@ const ActivityStatusLoader: React.FC<ActivityStatusLoaderProps> = ({ traceState,
         setStatusText(currentStatus);
         lastStatusRef.current = currentStatus;
         setLastUpdated(Date.now());
-        console.log(`🔄 Status updated: ${currentStatus}`);
+        if (import.meta.env.DEV && window.__chatDebugMode) {
+          console.log(`🔄 Status updated: ${currentStatus}`);
+        }
       }
     }, 100); // Much more frequent updates
 
@@ -79,7 +90,9 @@ const ActivityStatusLoader: React.FC<ActivityStatusLoaderProps> = ({ traceState,
 
     // Set up a document-level event listener for reactivating animations
     const handleReactivate = () => {
-      console.log('♻️ Reactivating activity animations');
+      if (import.meta.env.DEV && window.__chatDebugMode) {
+        console.log('♻️ Reactivating activity animations');
+      }
       setLastUpdated(Date.now());
       
       // Get fresh status when reactivated
@@ -93,7 +106,9 @@ const ActivityStatusLoader: React.FC<ActivityStatusLoaderProps> = ({ traceState,
     // Set up safety timer to remove loader after 30 seconds
     const safetyTimer = setTimeout(() => {
       if (isLoading) {
-        console.log('⚠️ Safety timeout reached for loader - activity should have completed');
+        if (import.meta.env.DEV && window.__chatDebugMode) {
+          console.log('⚠️ Safety timeout reached for loader - activity should have completed');
+        }
         document.dispatchEvent(new CustomEvent('forceCompleteTextContent', {
           detail: { source: 'safety_timeout', responseId }
         }));
@@ -106,7 +121,9 @@ const ActivityStatusLoader: React.FC<ActivityStatusLoaderProps> = ({ traceState,
       clearTimeout(safetyTimer);
       document.removeEventListener('reactivateAnimations', handleReactivate);
       traceObserver.disconnect();
-      console.log(`🛑 Activity loader ${instanceId.current} deactivated`);
+      if (import.meta.env.DEV && window.__chatDebugMode) {
+        console.log(`🛑 Activity loader ${instanceId.current} deactivated`);
+      }
     };
   }, [isLoading, responseId, mountTime]);
 

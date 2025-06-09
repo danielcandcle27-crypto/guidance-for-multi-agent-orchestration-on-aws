@@ -28,6 +28,10 @@ interface MultiAgentProps {
 export class MultiAgent extends Construct {
     public readonly supervisorAgent: Agent;
     public readonly supervisorAgentAlias: AgentAlias;
+    public readonly productRecommendationSubAgent: ProductRecommendationSubAgent;
+    public readonly personalizationSubAgent: PersonalizationSubAgent;
+    public readonly troubleshootSubAgent: TroubleshootSubAgent;
+    public readonly orderManagementSubAgent: OrderManagementSubAgent;
 
     constructor(scope: Construct, id: string, props: MultiAgentProps) {
         super(scope, id);
@@ -174,14 +178,12 @@ export class MultiAgent extends Construct {
         console.log(`Deploying in region: ${currentRegion}`);
         
         // Define the models we might use
-        const novaProModel = BedrockFoundationModel.AMAZON_TITAN_PREMIER_V1_0;
-        const claudeModel = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_7_SONNET_V1_0;
+        const novaProModel = BedrockFoundationModel.AMAZON_NOVA_PRO_V1;
         
         let supervisorAgent: Agent;
         
-        // Special case for Titan Premier in us-east-1 (its home region)
         if (currentRegion === 'us-east-1') {
-            console.log('Deploying in us-east-1: Using direct model invocation for Titan Premier');
+            console.log('Deploying in us-east-1: Using direct model invocation');
             
             // Create supervisor agent with direct model reference (no cross-region profile)
             supervisorAgent = new Agent(this, "supervisorAgent", {
@@ -218,7 +220,7 @@ export class MultiAgent extends Construct {
             const supervisorInferenceProfile = CrossRegionInferenceProfile.fromConfig({
                 geoRegion: CrossRegionInferenceProfileRegion.US,
                 // Use Claude model for best cross-region support
-                model: claudeModel,
+                model: novaProModel,
             });
 
             supervisorAgent = new Agent(this, "supervisorAgent", {
@@ -249,18 +251,22 @@ export class MultiAgent extends Construct {
                         "bedrock:GetFoundationModel",
                     ],
                     resources: [
-                        `arn:aws:bedrock:*::foundation-model/${claudeModel.modelId}`,
+                        `arn:aws:bedrock:*::foundation-model/${novaProModel.modelId}`,
                         supervisorInferenceProfile.inferenceProfileArn,
                     ],
                 })
             );
         }
 
-        const supervisorAgentAlias = new AgentAlias(this, "supervisorAgentAlias", {
+        const supervisorAgentAlias = new AgentAlias(this, "alias", {
             agent: supervisorAgent,
         });
 
         this.supervisorAgent = supervisorAgent;
         this.supervisorAgentAlias = supervisorAgentAlias;
+        this.productRecommendationSubAgent = productRecommendationSubAgent;
+        this.personalizationSubAgent = personalizationSubAgent;
+        this.troubleshootSubAgent = troubleshootSubAgent;
+        this.orderManagementSubAgent = orderManagementSubAgent;
     }
 }

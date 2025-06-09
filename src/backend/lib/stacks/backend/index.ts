@@ -57,6 +57,18 @@ export class BackendStack extends CommonStack {
             CODEGEN_GRAPH_API_ID: streamingApi.amplifiedGraphApi.apiId,
             VITE_GRAPH_API_URL: streamingApi.amplifiedGraphApi.graphqlUrl,
             VITE_STORAGE_BUCKET_NAME: storage.structuredDataBucket.bucketName,
+            VITE_WEBSOCKET_ENDPOINT: streamingApi.amplifiedGraphApi.realtimeUrl,
+            // Agent IDs for trace identification
+            VITE_SUPERVISOR_AGENT_ID: multiAgent.supervisorAgent.agentId,
+            VITE_SUPERVISOR_ALIAS_ID: multiAgent.supervisorAgentAlias.aliasId,
+            VITE_PRODUCT_RECOMMENDATION_AGENT_ID: multiAgent.productRecommendationSubAgent.agent.agentId,
+            VITE_PRODUCT_RECOMMENDATION_ALIAS_ID: multiAgent.productRecommendationSubAgent.agentAlias.aliasId,
+            VITE_PERSONALIZATION_AGENT_ID: multiAgent.personalizationSubAgent.agent.agentId,
+            VITE_PERSONALIZATION_ALIAS_ID: multiAgent.personalizationSubAgent.agentAlias.aliasId,
+            VITE_TROUBLESHOOT_AGENT_ID: multiAgent.troubleshootSubAgent.agent.agentId,
+            VITE_TROUBLESHOOT_ALIAS_ID: multiAgent.troubleshootSubAgent.agentAlias.aliasId,
+            VITE_ORDER_MANAGEMENT_AGENT_ID: multiAgent.orderManagementSubAgent.agent.agentId,
+            VITE_ORDER_MANAGEMENT_ALIAS_ID: multiAgent.orderManagementSubAgent.agentAlias.aliasId,
         };
     }
 }

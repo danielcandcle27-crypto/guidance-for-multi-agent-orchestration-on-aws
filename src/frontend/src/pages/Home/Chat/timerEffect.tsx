@@ -1,6 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { TraceGroup, TraceState } from '../../../utilities/traceParser';
 
+// Extend Window interface for debug flags
+declare global {
+  interface Window {
+    __traceDebugMode?: boolean;
+  }
+}
+
 /**
  * Custom hook to handle trace timer updates with proper cleanup and completion detection
  * This implementation fixes the continuous process issue by ensuring proper interval cleanup
@@ -15,12 +22,16 @@ export const useTraceTimer = (
   const allTracesCompleteRef = useRef(false);
   const updateCountRef = useRef(0);
   const isProcessingRef = useRef(false);
+  const lastUpdateTimeRef = useRef(0);
   const MAX_UPDATES = 300; // Stop updating after ~5 minutes
+  const MIN_UPDATE_INTERVAL = 2000; // Only update every 2 seconds to reduce re-renders
 
   // Add event listener for force-stopping all timers
   useEffect(() => {
     const forceCleanup = () => {
-      console.log('🧹 Force cleanup of all trace timers triggered by external event');
+      if (import.meta.env.DEV && window.__traceDebugMode) {
+        console.log('🧹 Force cleanup of all trace timers triggered by external event');
+      }
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
@@ -38,13 +49,17 @@ export const useTraceTimer = (
   useEffect(() => {
     // Don't start a new timer if we're already processing to prevent duplicates
     if (isProcessingRef.current) {
-      console.log('Trace timer update already in progress, not starting a new one');
+      if (import.meta.env.DEV && window.__traceDebugMode) {
+        console.log('Trace timer update already in progress, not starting a new one');
+      }
       return;
     }
 
     // Clear any existing timer when dependencies change
     if (timerIntervalRef.current) {
-      console.log('Clearing previous timer interval');
+      if (import.meta.env.DEV && window.__traceDebugMode) {
+        console.log('Clearing previous timer interval');
+      }
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
@@ -67,18 +82,24 @@ export const useTraceTimer = (
     // Don't start a timer if all traces are already complete
     if (incompleteTraceGroups.length === 0) {
       allTracesCompleteRef.current = true;
-      console.log('All trace groups are already complete, not starting timer');
+      if (import.meta.env.DEV && window.__traceDebugMode) {
+        console.log('All trace groups are already complete, not starting timer');
+      }
       return;
     }
     
-    console.log('Starting trace timer update interval');
+    if (import.meta.env.DEV && window.__traceDebugMode) {
+      console.log('Starting trace timer update interval');
+    }
     isProcessingRef.current = true;
     
-    // Update timers every second
+    // Performance optimization: Update less frequently and with throttling
     timerIntervalRef.current = setInterval(() => {
       // Safety check - stop updating after MAX_UPDATES
       if (updateCountRef.current > MAX_UPDATES) {
-        console.log('Reached max timer updates, stopping interval');
+        if (import.meta.env.DEV && window.__traceDebugMode) {
+          console.log('Reached max timer updates, stopping interval');
+        }
         if (timerIntervalRef.current) {
           clearInterval(timerIntervalRef.current);
           timerIntervalRef.current = null;
@@ -86,6 +107,13 @@ export const useTraceTimer = (
         }
         return;
       }
+      
+      // Throttle updates to prevent excessive re-renders
+      const now = Date.now();
+      if (now - lastUpdateTimeRef.current < MIN_UPDATE_INTERVAL) {
+        return;
+      }
+      lastUpdateTimeRef.current = now;
       
       updateCountRef.current += 1;
       
@@ -98,12 +126,16 @@ export const useTraceTimer = (
       // Store the result for the next check
       allTracesCompleteRef.current = checkAllComplete(traceState);
       
-      console.log('🔍 TIMER DEBUG: Trace completion check:', 
-        allTracesCompleteRef.current ? 'All traces complete!' : 'Some traces still running', 
-        'Running for', updateCountRef.current, 'updates');
+      if (import.meta.env.DEV && window.__traceDebugMode) {
+        console.log('🔍 TIMER DEBUG: Trace completion check:', 
+          allTracesCompleteRef.current ? 'All traces complete!' : 'Some traces still running', 
+          'Running for', updateCountRef.current, 'updates');
+      }
       
       if (allTracesCompleteRef.current) {
-        console.log('🛑 All trace groups are complete, stopping interval');
+        if (import.meta.env.DEV && window.__traceDebugMode) {
+          console.log('🛑 All trace groups are complete, stopping interval');
+        }
         if (timerIntervalRef.current) {
           clearInterval(timerIntervalRef.current);
           timerIntervalRef.current = null;
@@ -118,20 +150,21 @@ export const useTraceTimer = (
           return prevState; // No changes needed
         }
 
-        // Make a copy to avoid direct mutation
-        const newState = JSON.parse(JSON.stringify(prevState));
+        // Performance optimization: Use shallow copying instead of deep JSON parse
         const currentTimestamp = Date.now();
         let hasUpdates = false;
+        const updatedMessages: any[] = [];
         
-        // Update all trace groups
-        newState.messages = newState.messages.map(msg => {
+        // Performance optimization: Update only changed trace groups
+        prevState.messages.forEach(msg => {
           if (msg.type === 'trace-group') {
             // Safe cast since we already checked type
             const traceGroup = msg as TraceGroup;
             
             // Skip if already marked complete
             if (traceGroup.isComplete) {
-              return traceGroup;
+              updatedMessages.push(traceGroup);
+              return;
             }
             
             // Check if this trace group has a completed final response
@@ -146,69 +179,86 @@ export const useTraceTimer = (
             
             // Only update active trace groups that don't have final responses
             if (!hasFinalResponse) {
-              // Calculate elapsed time from when this trace group started
-              const totalElapsedTime = ((currentTimestamp - traceGroup.startTime) / 1000).toFixed(2);
+              // Performance optimization: Calculate timing less frequently
+              const timeDiff = currentTimestamp - traceGroup.startTime;
               
-              // Count regular tasks (non-special)
-              const regularTaskCount = 'tasks' in traceGroup && traceGroup.tasks ? 
-                traceGroup.tasks.filter(t => t.stepNumber > 0).length : 0;
-              
-              // Extract base title (remove timing info)
-              const baseTitleParts = traceGroup.dropdownTitle.split('(');
-              if (baseTitleParts.length > 0) {
-                const baseTitle = baseTitleParts[0].trim();
+              // Only update every few seconds for better performance
+              if (timeDiff % 3000 < 1000) { // Update roughly every 3 seconds
+                const totalElapsedTime = (timeDiff / 1000).toFixed(2);
                 
-                // Update the dropdown title with current timing
-                const newTitle = `${baseTitle} (${totalElapsedTime} seconds, ${regularTaskCount} steps)`;
+                // Count regular tasks (non-special)
+                const regularTaskCount = 'tasks' in traceGroup && traceGroup.tasks ? 
+                  traceGroup.tasks.filter(t => t.stepNumber > 0).length : 0;
                 
-                // Only update if changed
-                if (traceGroup.dropdownTitle !== newTitle) {
-                  traceGroup.dropdownTitle = newTitle;
-                  hasUpdates = true;
+                // Extract base title (remove timing info)
+                const baseTitleParts = traceGroup.dropdownTitle.split('(');
+                if (baseTitleParts.length > 0) {
+                  const baseTitle = baseTitleParts[0].trim();
+                  
+                  // Update the dropdown title with current timing
+                  const newTitle = `${baseTitle} (${totalElapsedTime} seconds, ${regularTaskCount} steps)`;
+                  
+                  // Only update if changed
+                  if (traceGroup.dropdownTitle !== newTitle) {
+                    const updatedGroup = { ...traceGroup, dropdownTitle: newTitle };
+                    updatedMessages.push(updatedGroup);
+                    hasUpdates = true;
+                    return;
+                  }
                 }
               }
+              updatedMessages.push(traceGroup);
             } else if (!traceGroup.isComplete) {
               // Mark this trace group as complete so we don't update it anymore
-              console.log(`Marking trace group ${traceGroup.agentId || 'unknown'} as complete`);
-              traceGroup.isComplete = true;
-              hasUpdates = true;
+              if (import.meta.env.DEV && window.__traceDebugMode) {
+                console.log(`Marking trace group ${traceGroup.agentId || 'unknown'} as complete`);
+              }
               
-              // For completed traces, update the title one last time but replace "seconds" with "total"
-              // to indicate it's a final time
+              // Performance optimization: Create completed group in one operation
               const baseTitleParts = traceGroup.dropdownTitle.split('(');
+              let finalTitle = traceGroup.dropdownTitle;
+              
               if (baseTitleParts.length > 0) {
                 const baseTitle = baseTitleParts[0].trim();
                 const timeMatch = traceGroup.dropdownTitle.match(/\(([\d.]+) seconds/);
-                const stepCountMatch = traceGroup.dropdownTitle.match(/(\d+) steps\)/);
-                
                 const elapsedTime = timeMatch ? timeMatch[1] : "0.00";
                 
-                // Use the actual task count instead of relying on regex match
                 const regularTaskCount = 'tasks' in traceGroup && traceGroup.tasks ? 
                   traceGroup.tasks.filter(t => t.stepNumber > 0).length : 0;
-                const stepCount = regularTaskCount > 0 ? regularTaskCount.toString() : (stepCountMatch ? stepCountMatch[1] : "0");
                 
-                // Format the title to show it's complete
-                const newTitle = `${baseTitle} (${elapsedTime}s total, ${stepCount} steps)`;
-                
-                if (traceGroup.dropdownTitle !== newTitle) {
-                  traceGroup.dropdownTitle = newTitle;
-                }
+                finalTitle = `${baseTitle} (${elapsedTime}s total, ${regularTaskCount} steps)`;
               }
+              
+              const completedGroup = {
+                ...traceGroup,
+                isComplete: true,
+                dropdownTitle: finalTitle
+              };
+              
+              updatedMessages.push(completedGroup);
+              hasUpdates = true;
+            } else {
+              updatedMessages.push(traceGroup);
             }
+          } else {
+            updatedMessages.push(msg);
           }
-          return msg;
         });
         
         // Only return new state if we actually made changes
-        return hasUpdates ? newState : prevState;
+        return hasUpdates ? {
+          ...prevState,
+          messages: updatedMessages
+        } : prevState;
       });
-    }, 1000);
+    }, 2000); // Update every 2 seconds instead of every second
     
     // Clean up interval when component unmounts or dependencies change
     return () => {
       if (timerIntervalRef.current) {
-        console.log('Cleaning up timer interval on effect cleanup');
+        if (import.meta.env.DEV && window.__traceDebugMode) {
+          console.log('Cleaning up timer interval on effect cleanup');
+        }
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
         isProcessingRef.current = false;

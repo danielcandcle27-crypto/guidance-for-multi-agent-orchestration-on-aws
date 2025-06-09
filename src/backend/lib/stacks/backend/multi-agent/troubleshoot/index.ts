@@ -28,6 +28,8 @@ interface TroubleshootSubAgentProps {
 export class TroubleshootSubAgent extends Construct {
     public readonly agentCollaborator: AgentCollaborator;
     public readonly knowledgeBaseId: string;
+    public readonly agent: Agent;
+    public readonly agentAlias: AgentAlias;
 
     constructor(scope: Construct, id: string, props: TroubleshootSubAgentProps) {
         super(scope, id);
@@ -147,7 +149,7 @@ export class TroubleshootSubAgent extends Construct {
             })
         );
 
-        const troubleshootAgentAlias = new AgentAlias(this, "troubleshootAgentAlias", {
+        const troubleshootAgentAlias = new AgentAlias(this, "alias", {
             agent: troubleshootAgent,
         });
 
@@ -160,5 +162,7 @@ export class TroubleshootSubAgent extends Construct {
 
         this.agentCollaborator = troubleshootAgentCollaborator;
         this.knowledgeBaseId = troubleshootKnowledgeBase.knowledgeBaseId;
+        this.agent = troubleshootAgent;
+        this.agentAlias = troubleshootAgentAlias;
     }
 }

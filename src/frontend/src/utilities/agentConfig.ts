@@ -24,6 +24,26 @@ interface AgentConfig {
     agentId: string;
     agentAliasId: string;
   };
+  supervisor: {
+    agentId: string;
+    agentAliasId: string;
+  };
+  productRecommendation: {
+    agentId: string;
+    agentAliasId: string;
+  };
+  personalization: {
+    agentId: string;
+    agentAliasId: string;
+  };
+  troubleshoot: {
+    agentId: string;
+    agentAliasId: string;
+  };
+  orderManagement: {
+    agentId: string;
+    agentAliasId: string;
+  };
 }
 
 // No hardcoded agent IDs - they're considered bad practice
@@ -83,7 +103,89 @@ export const getAgentTypeFromName = (name?: string): string | undefined => {
 export const CONFIG_KEYS = {
   ROUTING_CLASSIFIER_AGENT_ID: 'VITE_ROUTING_CLASSIFIER_AGENT_ID',
   ROUTING_CLASSIFIER_ALIAS_ID: 'VITE_ROUTING_CLASSIFIER_ALIAS_ID',
+  SUPERVISOR_AGENT_ID: 'VITE_SUPERVISOR_AGENT_ID',
+  SUPERVISOR_ALIAS_ID: 'VITE_SUPERVISOR_ALIAS_ID',
+  PRODUCT_RECOMMENDATION_AGENT_ID: 'VITE_PRODUCT_RECOMMENDATION_AGENT_ID',
+  PRODUCT_RECOMMENDATION_ALIAS_ID: 'VITE_PRODUCT_RECOMMENDATION_ALIAS_ID',
+  PERSONALIZATION_AGENT_ID: 'VITE_PERSONALIZATION_AGENT_ID',
+  PERSONALIZATION_ALIAS_ID: 'VITE_PERSONALIZATION_ALIAS_ID',
+  TROUBLESHOOT_AGENT_ID: 'VITE_TROUBLESHOOT_AGENT_ID',
+  TROUBLESHOOT_ALIAS_ID: 'VITE_TROUBLESHOOT_ALIAS_ID',
+  ORDER_MANAGEMENT_AGENT_ID: 'VITE_ORDER_MANAGEMENT_AGENT_ID',
+  ORDER_MANAGEMENT_ALIAS_ID: 'VITE_ORDER_MANAGEMENT_ALIAS_ID',
 } as const;
+
+// Dynamic agent ID to agent name mapping
+// This will be populated as we encounter agent IDs in trace data
+const agentIdToNameMap = new Map<string, string>();
+
+/**
+ * Get agent name from agent ID
+ * Uses both static environment variable mapping and dynamic discovery
+ */
+export const getAgentNameFromId = (agentId: string): string => {
+  if (!agentId) return AGENT_TYPES.SUPERVISOR;
+  
+  // Check static mapping from environment variables
+  if (agentId === agentConfig.routingClassifier.agentId) {
+    return AGENT_TYPES.ROUTING_CLASSIFIER;
+  }
+  if (agentId === agentConfig.supervisor.agentId) {
+    return AGENT_TYPES.SUPERVISOR;
+  }
+  if (agentId === agentConfig.productRecommendation.agentId) {
+    return AGENT_TYPES.PRODUCT_RECOMMENDATION;
+  }
+  if (agentId === agentConfig.personalization.agentId) {
+    return AGENT_TYPES.PERSONALIZATION;
+  }
+  if (agentId === agentConfig.troubleshoot.agentId) {
+    return AGENT_TYPES.TROUBLESHOOT;
+  }
+  if (agentId === agentConfig.orderManagement.agentId) {
+    return AGENT_TYPES.ORDER_MANAGEMENT;
+  }
+  
+  // Check dynamic mapping
+  if (agentIdToNameMap.has(agentId)) {
+    return agentIdToNameMap.get(agentId)!;
+  }
+  
+  // Default to Supervisor for unknown agent IDs
+  return AGENT_TYPES.SUPERVISOR;
+};
+
+/**
+ * Register an agent ID to name mapping dynamically
+ * This allows us to learn agent names from trace data
+ */
+export const registerAgentMapping = (agentId: string, agentName: string): void => {
+  if (agentId && agentName) {
+    agentIdToNameMap.set(agentId, agentName);
+  }
+};
+
+/**
+ * Get all known agent ID to name mappings
+ */
+export const getAllAgentMappings = (): Record<string, string> => {
+  const mappings: Record<string, string> = {};
+  
+  // Add static mappings
+  mappings[agentConfig.routingClassifier.agentId] = AGENT_TYPES.ROUTING_CLASSIFIER;
+  mappings[agentConfig.supervisor.agentId] = AGENT_TYPES.SUPERVISOR;
+  mappings[agentConfig.productRecommendation.agentId] = AGENT_TYPES.PRODUCT_RECOMMENDATION;
+  mappings[agentConfig.personalization.agentId] = AGENT_TYPES.PERSONALIZATION;
+  mappings[agentConfig.troubleshoot.agentId] = AGENT_TYPES.TROUBLESHOOT;
+  mappings[agentConfig.orderManagement.agentId] = AGENT_TYPES.ORDER_MANAGEMENT;
+  
+  // Add dynamic mappings
+  agentIdToNameMap.forEach((name, id) => {
+    mappings[id] = name;
+  });
+  
+  return mappings;
+};
 
 /**
  * Attempts to load config from a local file for development environments
@@ -125,6 +227,16 @@ const loadAgentConfig = (): AgentConfig => {
   const envConfig: Record<string, string | undefined> = {
     [CONFIG_KEYS.ROUTING_CLASSIFIER_AGENT_ID]: import.meta.env.VITE_ROUTING_CLASSIFIER_AGENT_ID,
     [CONFIG_KEYS.ROUTING_CLASSIFIER_ALIAS_ID]: import.meta.env.VITE_ROUTING_CLASSIFIER_ALIAS_ID,
+    [CONFIG_KEYS.SUPERVISOR_AGENT_ID]: import.meta.env.VITE_SUPERVISOR_AGENT_ID,
+    [CONFIG_KEYS.SUPERVISOR_ALIAS_ID]: import.meta.env.VITE_SUPERVISOR_ALIAS_ID,
+    [CONFIG_KEYS.PRODUCT_RECOMMENDATION_AGENT_ID]: import.meta.env.VITE_PRODUCT_RECOMMENDATION_AGENT_ID,
+    [CONFIG_KEYS.PRODUCT_RECOMMENDATION_ALIAS_ID]: import.meta.env.VITE_PRODUCT_RECOMMENDATION_ALIAS_ID,
+    [CONFIG_KEYS.PERSONALIZATION_AGENT_ID]: import.meta.env.VITE_PERSONALIZATION_AGENT_ID,
+    [CONFIG_KEYS.PERSONALIZATION_ALIAS_ID]: import.meta.env.VITE_PERSONALIZATION_ALIAS_ID,
+    [CONFIG_KEYS.TROUBLESHOOT_AGENT_ID]: import.meta.env.VITE_TROUBLESHOOT_AGENT_ID,
+    [CONFIG_KEYS.TROUBLESHOOT_ALIAS_ID]: import.meta.env.VITE_TROUBLESHOOT_ALIAS_ID,
+    [CONFIG_KEYS.ORDER_MANAGEMENT_AGENT_ID]: import.meta.env.VITE_ORDER_MANAGEMENT_AGENT_ID,
+    [CONFIG_KEYS.ORDER_MANAGEMENT_ALIAS_ID]: import.meta.env.VITE_ORDER_MANAGEMENT_ALIAS_ID,
   };
 
   // Load local development config if available
@@ -133,40 +245,41 @@ const loadAgentConfig = (): AgentConfig => {
   // Combine configurations with environment variables taking precedence
   const combinedConfig = { ...localDevConfig, ...envConfig };
   
-  // Check for missing required configuration values
-  const missingKeys: string[] = [];
-  if (!combinedConfig[CONFIG_KEYS.ROUTING_CLASSIFIER_AGENT_ID]) {
-    missingKeys.push(CONFIG_KEYS.ROUTING_CLASSIFIER_AGENT_ID);
-  }
-  
-  if (!combinedConfig[CONFIG_KEYS.ROUTING_CLASSIFIER_ALIAS_ID]) {
-    missingKeys.push(CONFIG_KEYS.ROUTING_CLASSIFIER_ALIAS_ID);
-  }
-
-  // In development, provide guidance if values are missing
-  if (missingKeys.length > 0) {
-    const errorMsg = `Missing required agent configuration: ${missingKeys.join(', ')}`;
-    
-    if (import.meta.env.DEV) {
-
-      // For development, we'll return placeholder values
-      // in production we'd typically want to throw an error
-      return {
-        routingClassifier: {
-          agentId: `missing-${CONFIG_KEYS.ROUTING_CLASSIFIER_AGENT_ID}`,
-          agentAliasId: `missing-${CONFIG_KEYS.ROUTING_CLASSIFIER_ALIAS_ID}`
-        }
-      };
-    } else {
-      // In production, fail fast if required configuration is missing
-      throw new Error(errorMsg);
-    }
+  // For development, provide default values if missing to avoid build failures
+  if (import.meta.env.DEV) {
+    // Fill in any missing values with placeholders
+    Object.keys(CONFIG_KEYS).forEach(key => {
+      const configKey = CONFIG_KEYS[key as keyof typeof CONFIG_KEYS];
+      if (!combinedConfig[configKey]) {
+        combinedConfig[configKey] = `dev-placeholder-${configKey.toLowerCase().replace('vite_', '')}`;
+      }
+    });
   }
 
   return {
     routingClassifier: {
       agentId: combinedConfig[CONFIG_KEYS.ROUTING_CLASSIFIER_AGENT_ID] as string,
       agentAliasId: combinedConfig[CONFIG_KEYS.ROUTING_CLASSIFIER_ALIAS_ID] as string
+    },
+    supervisor: {
+      agentId: combinedConfig[CONFIG_KEYS.SUPERVISOR_AGENT_ID] as string,
+      agentAliasId: combinedConfig[CONFIG_KEYS.SUPERVISOR_ALIAS_ID] as string
+    },
+    productRecommendation: {
+      agentId: combinedConfig[CONFIG_KEYS.PRODUCT_RECOMMENDATION_AGENT_ID] as string,
+      agentAliasId: combinedConfig[CONFIG_KEYS.PRODUCT_RECOMMENDATION_ALIAS_ID] as string
+    },
+    personalization: {
+      agentId: combinedConfig[CONFIG_KEYS.PERSONALIZATION_AGENT_ID] as string,
+      agentAliasId: combinedConfig[CONFIG_KEYS.PERSONALIZATION_ALIAS_ID] as string
+    },
+    troubleshoot: {
+      agentId: combinedConfig[CONFIG_KEYS.TROUBLESHOOT_AGENT_ID] as string,
+      agentAliasId: combinedConfig[CONFIG_KEYS.TROUBLESHOOT_ALIAS_ID] as string
+    },
+    orderManagement: {
+      agentId: combinedConfig[CONFIG_KEYS.ORDER_MANAGEMENT_AGENT_ID] as string,
+      agentAliasId: combinedConfig[CONFIG_KEYS.ORDER_MANAGEMENT_ALIAS_ID] as string
     }
   };
 };

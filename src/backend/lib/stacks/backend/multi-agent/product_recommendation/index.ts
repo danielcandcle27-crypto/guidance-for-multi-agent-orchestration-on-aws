@@ -33,6 +33,8 @@ interface ProductRecommendationSubAgentProps {
 export class ProductRecommendationSubAgent extends Construct {
     public readonly agentCollaborator: AgentCollaborator;
     public readonly knowledgeBaseId: string;
+    public readonly agent: Agent;
+    public readonly agentAlias: AgentAlias;
 
     constructor(scope: Construct, id: string, props: ProductRecommendationSubAgentProps) {
         super(scope, id);
@@ -185,7 +187,7 @@ export class ProductRecommendationSubAgent extends Construct {
 
         const productRecommendationAgentAlias = new AgentAlias(
             this,
-            "productRecommendationAgentAlias",
+            "alias",
             {
                 agent: productRecommendationAgent,
             }
@@ -200,5 +202,7 @@ export class ProductRecommendationSubAgent extends Construct {
 
         this.agentCollaborator = productRecommendationAgentCollaborator;
         this.knowledgeBaseId = productRecommendationKnowledgeBase.knowledgeBaseId;
+        this.agent = productRecommendationAgent;
+        this.agentAlias = productRecommendationAgentAlias;
     }
 }
