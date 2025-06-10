@@ -40,7 +40,7 @@ export class TroubleshootSubAgent extends Construct {
             this,
             "troubleshootKnowledgeBase",
             {
-                embeddingsModel: BedrockFoundationModel.COHERE_EMBED_ENGLISH_V3,
+                embeddingsModel: BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
                 instruction:
                     "Use this knowledge base to retrieve user preferences and browsing history.",
             }
@@ -122,7 +122,7 @@ export class TroubleshootSubAgent extends Construct {
             checkIntervalHours: 24
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_HAIKU_V1_0;
+        const model = BedrockFoundationModel.AMAZON_NOVA_LITE_V1;
 
         const troubleshootAgent = new Agent(this, "troubleshootAgent", {
             //name: "TroubleshootAgent-" + Date.now(), 

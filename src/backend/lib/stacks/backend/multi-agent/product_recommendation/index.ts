@@ -45,7 +45,7 @@ export class ProductRecommendationSubAgent extends Construct {
             this,
             "productRecommendationKnowledgeBase",
             {
-                embeddingsModel: BedrockFoundationModel.COHERE_EMBED_ENGLISH_V3,
+                embeddingsModel: BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
                 instruction:
                     "Use this knowledge base to retrieve user preferences and browsing history.",
             }
@@ -150,7 +150,7 @@ export class ProductRecommendationSubAgent extends Construct {
             ),
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_SONNET_V1_0;
+        const model = BedrockFoundationModel.AMAZON_NOVA_LITE_V1;
 
         const productRecommendationInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,

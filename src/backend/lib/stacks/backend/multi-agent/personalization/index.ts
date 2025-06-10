@@ -45,7 +45,7 @@ export class PersonalizationSubAgent extends Construct {
             this,
             "personalizationKnowledgeBase",
             {
-                embeddingsModel: BedrockFoundationModel.COHERE_EMBED_ENGLISH_V3,
+                embeddingsModel: BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
                 instruction:
                     "Use this knowledge base to retrieve user preferences and browsing history.",
             }
