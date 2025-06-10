@@ -96,10 +96,10 @@ export function getModelLabelForTrace(traceType: string): string {
       return 'Nova Lite';
     case AGENT_TYPES.TROUBLESHOOT:
     case 'Troubleshoot':
-      return 'Nova Lite';
+      return 'Nova Micro';
     case AGENT_TYPES.PERSONALIZATION:
     case 'Personalization':
-      return 'Nova Micro';
+      return 'Nova Lite';
     case AGENT_TYPES.ORDER_MANAGEMENT:
     case 'OrderManagement':
       return 'Nova Micro';
