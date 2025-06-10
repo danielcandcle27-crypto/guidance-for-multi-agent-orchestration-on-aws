@@ -39,7 +39,7 @@ export class OrderManagementSubAgent extends Construct {
             ),
         });
 
-        const model = BedrockFoundationModel.ANTHROPIC_CLAUDE_3_5_HAIKU_V1_0;
+        const model = BedrockFoundationModel.AMAZON_NOVA_MICRO_V1;
 
         const orderManagementInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,

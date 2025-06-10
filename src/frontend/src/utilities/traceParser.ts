@@ -90,19 +90,19 @@ export function getModelLabelForTrace(traceType: string): string {
   switch (traceType) {
     case AGENT_TYPES.SUPERVISOR:
     case 'Supervisor':
-      return 'Nova Premier';
+      return 'Nova Pro';
     case AGENT_TYPES.PRODUCT_RECOMMENDATION:
     case 'ProductRecommendation':
-      return 'Claude 3 Sonnet';
+      return 'Nova Lite';
     case AGENT_TYPES.TROUBLESHOOT:
     case 'Troubleshoot':
-      return 'Claude 3 Haiku';
+      return 'Nova Lite';
     case AGENT_TYPES.PERSONALIZATION:
     case 'Personalization':
       return 'Nova Micro';
     case AGENT_TYPES.ORDER_MANAGEMENT:
     case 'OrderManagement':
-      return 'Claude 3.5 Haiku';
+      return 'Nova Micro';
     case AGENT_TYPES.ROUTING_CLASSIFIER:
       return 'Nova Micro V1';
     default:

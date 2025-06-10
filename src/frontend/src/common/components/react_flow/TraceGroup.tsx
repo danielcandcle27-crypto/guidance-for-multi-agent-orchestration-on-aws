@@ -292,17 +292,17 @@ const TraceGroup: React.FC<TraceGroupProps> = ({ traceGroup, hideTitle = false, 
     const normalizedType = agentType.toLowerCase();
     
     if (normalizedType.includes('super') || normalizedType === 'supervisor') {
-      return 'Nova Premier';
+      return 'Nova Pro';
     } else if (normalizedType.includes('routing') || normalizedType.includes('classifier')) {
       return 'Nova Micro';
     } else if (normalizedType.includes('product') || normalizedType.includes('recommendation')) {
-      return 'Claude 3 Sonnet';
+      return 'Nova Lite';
     } else if (normalizedType.includes('trouble')) {
-      return 'Claude 3 Haiku';
+      return 'Nova Lite';
     } else if (normalizedType.includes('personal')) {
       return 'Nova Micro';
     } else if (normalizedType.includes('order') || normalizedType.includes('management')) {
-      return 'Claude 3.5 Haiku';
+      return 'Nova Micro';
     }
     
     return 'Claude 3';
