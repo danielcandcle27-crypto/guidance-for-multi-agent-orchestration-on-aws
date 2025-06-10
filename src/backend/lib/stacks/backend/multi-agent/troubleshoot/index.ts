@@ -122,7 +122,7 @@ export class TroubleshootSubAgent extends Construct {
             checkIntervalHours: 24
         });
 
-        const model = BedrockFoundationModel.AMAZON_NOVA_LITE_V1;
+        const model = BedrockFoundationModel.AMAZON_NOVA_MICRO_V1;
 
         const troubleshootAgent = new Agent(this, "troubleshootAgent", {
             //name: "TroubleshootAgent-" + Date.now(), 

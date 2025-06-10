@@ -144,7 +144,7 @@ export class PersonalizationSubAgent extends Construct {
             ),
         });
 
-        const model = BedrockFoundationModel.AMAZON_NOVA_MICRO_V1;
+        const model = BedrockFoundationModel.AMAZON_NOVA_LITE_V1;
 
         const personalizationInferenceProfile = CrossRegionInferenceProfile.fromConfig({
             geoRegion: CrossRegionInferenceProfileRegion.US,
