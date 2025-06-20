@@ -14,22 +14,22 @@ const SampleQuestions: React.FC<SampleQuestionsProps> = ({ onQuestionClick }) =>
     {
       id: "product-recommendations",
       title: "Product Inquiry & Customer Feedback",
-      text: "I like good quality nova phones. Provide me a product suggestion, followed up with comments people say about it? - Logged in as cust010 (new request)",
+      text: "I like good quality nova phones. Provide me a product suggestion, followed up with comments people say about it? - customer id cust010 (new request)",
     },
     {
       id: "customer-preference",
       title: "Recommendation & Troubleshoot",
-      text: "I'm really interested in smart type watches. I dont care about cost. Let me know what you have that you think i'd like. Make sure to let me know of any known issues and warranty information too. - Logged in as cust002 (new request)",
+      text: "I'm really interested in smart type watches. I dont care about cost. Let me know what you have that you think i'd like. Make sure to let me know of any known issues and warranty information too. - customer id cust002 (new request)",
     },
     {
       id: "troubleshoot-watch",
       title: "Order Mgmt & Recommendation",
-      text: "I ordered a promax laptop, and would like to know if it has been delivered yet. I also have been looking through some of your phones online. Recommend me a phone i'd like. - Logged in as cust005 (new request)",
+      text: "I ordered a promax laptop, and would like to know if it has been delivered yet. I also have been looking through some of your phones online. Recommend me a phone i'd like. - customer id cust005 (new request)",
     },
     {
       id: "recommendation-faq",
       title: "Recommendation & FAQ",
-      text: "Are there any available speakers in stock that I would like under $100? And in case I run into issues with the product, give me some troubleshooting tips for the products. - Logged in as cust007 (new request)",
+      text: "Are there any available speakers in stock that I would like under $100? And in case I run into issues with the product, give me some troubleshooting tips for the products. - customer id cust007 (new request)",
     }
   ];
 
