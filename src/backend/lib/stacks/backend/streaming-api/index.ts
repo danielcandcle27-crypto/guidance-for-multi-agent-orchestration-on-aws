@@ -70,6 +70,13 @@ export class StreamingApi extends Construct {
             table.pointInTimeRecoverySpecification = {
                 pointInTimeRecoveryEnabled: true,
             };
+            // Configure table encryption to use default AWS managed key
+            // This will overwrite any existing encryption settings with AWS-managed KMS keys
+            table.sseSpecification = {
+                sseEnabled: true,
+                sseType: "KMS"
+                // Not specifying kmsMasterKeyId will default to AWS managed key
+            };
         });
 
         const resolverFunction = new CommonNodejsFunction(this, "resolverFunction", {
