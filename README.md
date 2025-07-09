@@ -200,7 +200,8 @@ cdk bootstrap aws://{ACCOUNT_ID}/{REGION}
 ```
 
 ### Authenticate to ECR
-``bash
+
+```bash
 aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 ```
 
