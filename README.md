@@ -199,6 +199,11 @@ npm i
 cdk bootstrap aws://{ACCOUNT_ID}/{REGION}
 ```
 
+### Authenticate to ECR
+``bash
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+```
+
 ### Setup environment variables for Bedrock agents
 
 This application uses environment variables to manage Amazon Bedrock agent IDs securely, with values **dynamically exported from the CDK stack** during deployment. This approach eliminates hardcoded IDs in any source code or configuration files.
