@@ -1820,188 +1820,111 @@ export const fetchFAQData = async () => {
   try {
     // In a real application, you would fetch this from an API endpoint
     // For demo purposes, we'll return the text directly
-    const faqText = `Product Name: ZenSound Wireless Headphones  
-Category: Headphones  
-Issue ID: HD001  
-Common Problems:  
-1. Bluetooth connection issues  
-   - Suggested Solution: Reset the Bluetooth connection on both devices and try reconnecting.  
-2. Battery drains quickly  
-   - Suggested Solution: Charge fully before use and avoid high-volume playback.  
-3. Audio quality is poor  
-   - Suggested Solution: Ensure no interference from other devices and update firmware if available.  
+    const faqText = `# Frequently Asked Questions
+
+## General Product Questions
+
+Q: What is your return policy?
+A: We offer a 30-day return policy on all products. Items must be in original packaging with all accessories included.
+
+Q: How do I track my order?
+A: You can track your order by logging into your account and viewing your order history, or by using the tracking number provided in your shipping confirmation email.
+
+Q: Do you ship internationally?
+A: Yes, we ship to most countries worldwide. Shipping costs and delivery times vary by location.
 
 ---
 
-Product Name: VitaFit Smartwatch  
-Category: Watch  
-Issue ID: SW001  
-Common Problems:  
-1. Screen is unresponsive  
-   - Suggested Solution: Perform a factory reset. Follow instructions in the user manual.  
-2. Syncing issues with the mobile app  
-   - Suggested Solution: Reinstall the app and reconnect the watch.  
-3. Inaccurate step tracking  
-   - Suggested Solution: Ensure the watch is secured properly on your wrist.  
+## Headphones & Audio
+
+Q: Are the ZenSound Wireless Headphones compatible with all devices?
+A: ZenSound Wireless Headphones are compatible with any Bluetooth-enabled device, including smartphones, tablets, laptops, and smart TVs.
+
+Q: How long does the battery last on SoundSphere Pro Headphones?
+A: The SoundSphere Pro Headphones offer up to 20 hours of playback time on a single charge with noise cancellation on, and up to 30 hours with noise cancellation off.
+
+Q: Is the SonicWave Bluetooth Speaker waterproof?
+A: Yes, the SonicWave Bluetooth Speaker has an IPX7 waterproof rating, making it suitable for use near pools or in the shower.
 
 ---
 
-Product Name: SonicWave Bluetooth Speaker  
-Category: Speaker  
-Issue ID: SP001  
-Common Problems:  
-1. Low audio quality  
-   - Suggested Solution: Adjust audio settings and avoid interference.  
-2. Battery life is short  
-   - Suggested Solution: Fully charge before use and limit volume level.  
-3. Speaker won’t turn on  
-   - Suggested Solution: Perform a reset by holding the power button for 10 seconds.  
+## Wearables & Smartwatches
+
+Q: Can I make calls from the VitaFit Smartwatch?
+A: Yes, the VitaFit Smartwatch allows you to make and receive calls when connected to your smartphone via Bluetooth.
+
+Q: Is the TrackMaster Smartwatch suitable for swimming?
+A: Yes, the TrackMaster Smartwatch is water-resistant up to 50 meters, making it suitable for swimming in shallow water. It's not recommended for diving or high-pressure water activities.
+
+Q: How accurate is the heart rate monitoring on smartwatches?
+A: Our smartwatches use advanced optical heart rate sensors that provide accuracy comparable to chest strap monitors for most activities. Extreme movements may temporarily affect readings.
 
 ---
 
-Product Name: SoundSphere Pro Headphones  
-Category: Headphones  
-Issue ID: HD002  
-Common Problems:  
-1. Noise-canceling isn’t effective  
-   - Suggested Solution: Ensure proper fit and update firmware.  
-2. Discomfort after prolonged use  
-   - Suggested Solution: Adjust fit or take breaks between use.  
-3. Connection drops frequently  
-   - Suggested Solution: Reset Bluetooth settings on both devices.  
+## Laptops & Computers
+
+Q: What's the difference between the ProMax Laptop and the UltraBook Pro?
+A: The ProMax Laptop offers higher performance with 16GB RAM and 512GB SSD, while the UltraBook Pro is more portable with 8GB RAM and 256GB SSD. The ProMax is better for intensive tasks, while the UltraBook Pro is ideal for everyday productivity.
+
+Q: Does the GigaBook Gaming Laptop support VR headsets?
+A: Yes, the GigaBook Gaming Laptop has the necessary ports and graphics capabilities to support most popular VR headsets on the market.
+
+Q: Can I upgrade the RAM or storage on the FlexTab Convertible Laptop?
+A: The RAM is soldered and cannot be upgraded, but the SSD can be replaced with a larger capacity model if needed.
 
 ---
 
-Product Name: TrackMaster Smartwatch  
-Category: Watch  
-Issue ID: SW002  
-Common Problems:  
-1. GPS not accurate  
-   - Suggested Solution: Ensure GPS is turned on and recalibrate if needed.  
-2. Heart rate sensor not working  
-   - Suggested Solution: Clean the sensor and ensure proper wrist placement.  
-3. Battery drains quickly  
-   - Suggested Solution: Disable GPS when not in use and reduce screen brightness.  
+## Smartphones & Mobile Devices
+
+Q: Does the Nova 5G Smartphone support wireless charging?
+A: Yes, the Nova 5G Smartphone supports Qi wireless charging up to 15W.
+
+Q: What's the screen size of the Infinity Ultra 5G?
+A: The Infinity Ultra 5G features a 6.7-inch AMOLED display with HDR10+ support.
+
+Q: How many cameras does the Eclipse X Smartphone have?
+A: The Eclipse X Smartphone has a quad-camera system on the back (main, ultrawide, telephoto, and depth sensor) and a dual-camera system on the front (main and wide-angle).
 
 ---
 
-Product Name: ThunderBolt Speaker  
-Category: Speaker  
-Issue ID: SP002  
-Common Problems:  
-1. Bass quality is lacking  
-   - Suggested Solution: Adjust equalizer settings and ensure device compatibility.  
-2. Speaker isn’t charging  
-   - Suggested Solution: Use the original charger or try another USB cable.  
-3. Sound cuts out intermittently  
-   - Suggested Solution: Move the speaker closer to the connected device.  
+## Warranty & Support
+
+Q: How long is the warranty period for your products?
+A: Most products come with a standard 1-year limited warranty. Premium products like the GigaBook Gaming Laptop and ProMax Laptop come with a 2-year warranty.
+
+Q: How do I request a repair for an item under warranty?
+A: Contact our customer support team through the Support section of our website or call our toll-free number. You'll need your order number and product serial number.
+
+Q: Do you offer extended warranty options?
+A: Yes, we offer extended warranty plans for most products that can be purchased at checkout or within 30 days of your original purchase.
 
 ---
 
-Product Name: ProMax Laptop  
-Category: Computer  
-Issue ID: PC001  
-Common Problems:  
-1. Overheating during heavy use  
-   - Suggested Solution: Ensure proper ventilation, and consider using a cooling pad.  
-2. Slow performance over time  
-   - Suggested Solution: Clear unnecessary files and update software regularly.  
-3. Battery drains quickly  
-   - Suggested Solution: Reduce screen brightness and close background apps.  
+## Account & Orders
+
+Q: How do I create an account?
+A: Click on the "Sign Up" button at the top of our website and follow the instructions to create your account.
+
+Q: Can I change my shipping address after placing an order?
+A: Address changes may be possible if the order hasn't entered the shipping phase. Contact customer service immediately for assistance.
+
+Q: How do I apply a promo code to my order?
+A: During checkout, you'll find a field labeled "Promo Code" or "Discount Code" where you can enter your code before finalizing payment.
 
 ---
 
-Product Name: UltraBook Pro Laptop  
-Category: Computer  
-Issue ID: PC002  
-Common Problems:  
-1. System lag or delay  
-   - Suggested Solution: Close unnecessary applications and free up storage.  
-2. Issues with Bluetooth pairing  
-   - Suggested Solution: Reset Bluetooth settings and retry.  
-3. Limited battery life  
-   - Suggested Solution: Reduce screen brightness and disable unnecessary services.  
+## Technical Support
 
----
+Q: Where can I download drivers for my products?
+A: Visit the Support section of our website and select your product to access all available downloads, including drivers, firmware updates, and user manuals.
 
-Product Name: GigaBook Gaming Laptop  
-Category: Computer  
-Issue ID: PC003  
-Common Problems:  
-1. Laptop overheats during gaming  
-   - Suggested Solution: Use a cooling pad and check fan settings.  
-2. Game graphics lag  
-   - Suggested Solution: Lower graphics settings for better performance.  
-3. Battery drains quickly  
-   - Suggested Solution: Play games while connected to the power adapter.  
+Q: My device isn't charging properly. What should I do?
+A: First, try using a different cable and power adapter. Make sure the charging port is clean and free of debris. If problems persist, contact technical support.
 
----
+Q: How do I perform a factory reset on my device?
+A: Factory reset procedures vary by product. Please consult your device's user manual for specific instructions, or contact our technical support team for guidance.
 
-Product Name: FlexTab Convertible Laptop  
-Category: Computer  
-Issue ID: PC004  
-Common Problems:  
-1. Touchscreen unresponsive  
-   - Suggested Solution: Restart the device and calibrate the screen.  
-2. Battery drains quickly in tablet mode  
-   - Suggested Solution: Reduce screen brightness and close background apps.  
-3. Hinge feels loose  
-   - Suggested Solution: Contact support for hinge adjustments or repairs.  
-
----
-
-Product Name: Nova 5G Smartphone  
-Category: Phone  
-Issue ID: PH001  
-Common Problems:  
-1. Battery drains faster than expected  
-   - Suggested Solution: Limit background apps and reduce screen brightness.  
-2. Network connectivity issues  
-   - Suggested Solution: Restart the device or reset network settings.  
-3. Phone overheating  
-   - Suggested Solution: Avoid heavy apps in succession and keep software up to date.  
-
----
-
-Product Name: Alpha One 5G  
-Category: Phones  
-Issue ID: PH002  
-Common Problems:  
-1. Camera issues or blurry photos  
-   - Suggested Solution: Clean the lens and update the camera app.  
-2. Storage fills up quickly  
-   - Suggested Solution: Backup files and delete unnecessary apps.  
-3. Charging problems  
-   - Suggested Solution: Use the original charger and avoid third-party adapters.  
-
----
-
-Product Name: Eclipse X Smartphone  
-Category: Phones  
-Issue ID: PH003  
-Common Problems:  
-1. SIM card not detected  
-   - Suggested Solution: Reinsert the SIM card and restart the device.  
-2. Display issues or flickering  
-   - Suggested Solution: Adjust brightness settings and disable adaptive brightness.  
-3. Battery doesn’t last all day  
-   - Suggested Solution: Close unused apps and reduce screen timeout.  
-
----
-
-Product Name: Infinity Ultra 5G  
-Category: Phone  
-Issue ID: PH004  
-Common Problems:  
-1. Display unresponsive in certain areas  
-   - Suggested Solution: Restart the device and recalibrate the touch settings.  
-2. Poor battery performance after update  
-   - Suggested Solution: Check for additional updates or roll back if possible.  
-3. Network issues on 5G  
-   - Suggested Solution: Toggle airplane mode on and off or reset network settings.  
-
---- 
-`;
+---`;
     
     return faqText;
   } catch (error) {
