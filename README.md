@@ -180,11 +180,11 @@ Default output format: json
 
 
 ### Clone repo & install dependencies
-clone the repo from <https://github.com/awslabs/genai-labs-mac-demo-customer-support>
+clone the repo from <https://github.com/aws-solutions-library-samples/guidance-for-multi-agent-orchestration-on-aws>
 
 ```bash
-cd /project-root/
-gh repo clone awslabs/genai-labs-mac-demo-customer-support
+git clone https://github.com/aws-solutions-library-samples/guidance-for-multi-agent-orchestration-on-aws.git
+cd guidance-for-multi-agent-orchestration-on-aws
 ```
 
 We are all set to install dependencies by using the following command. This will install `npm` dependencies required to run the app. Then, we will boostratp the account.
